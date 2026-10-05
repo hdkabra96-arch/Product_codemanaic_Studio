@@ -1,0 +1,6 @@
+{
+  "name": "Codemaniac Studio - Online Tools Platform",
+  "description": "Powerful online tools for everyday needs — PDF, Image, Video, Audio, Utility and AI tools by Codemaniac Studio.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
