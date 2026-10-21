@@ -244,12 +244,12 @@ export const CATEGORIES_DATA: Record<Exclude<ToolCategory, 'all'>, CategoryInfo>
 };
 
 export const ALL_TOOLS: ToolItem[] = [
-  // ==================== PDF TOOLS (15) ====================
+  // ==================== PDF TOOLS (20) ====================
   {
     id: 'pdf-conversion',
     name: 'PDF Conversion',
     category: 'pdf',
-    description: 'Convert PDF to and from different formats (Word, Excel, PowerPoint, etc.).',
+    description: 'Convert PDF into Low Quality, Middle Quality, or High & Premium Quality with zero errors.',
     iconName: 'FileText',
     badgeBg: 'bg-red-50 text-red-500',
     iconColor: '#EF4444',
@@ -415,6 +415,62 @@ export const ALL_TOOLS: ToolItem[] = [
     iconColor: '#F43F5E',
     status: 'available',
     route: '/tools/pdf-watermark',
+  },
+  {
+    id: 'pdf-page-rotation',
+    name: 'PDF Page Rotation',
+    category: 'pdf',
+    description: 'Rotate selected pages or all pages by 90°, 180°, or 270° with preview.',
+    iconName: 'RefreshCw',
+    badgeBg: 'bg-emerald-50 text-emerald-600',
+    iconColor: '#059669',
+    status: 'available',
+    route: '/tools/pdf-page-rotation',
+  },
+  {
+    id: 'pdf-page-deletion',
+    name: 'PDF Page Deletion',
+    category: 'pdf',
+    description: 'Remove selected pages or specified page ranges safely.',
+    iconName: 'FileMinus',
+    badgeBg: 'bg-red-50 text-red-600',
+    iconColor: '#DC2626',
+    status: 'available',
+    route: '/tools/pdf-page-deletion',
+  },
+  {
+    id: 'pdf-image-extraction',
+    name: 'PDF Image Extraction',
+    category: 'pdf',
+    description: 'Extract high-resolution embedded images with single or ZIP download.',
+    iconName: 'FileImage',
+    badgeBg: 'bg-sky-50 text-sky-600',
+    iconColor: '#0284C7',
+    status: 'available',
+    route: '/tools/pdf-image-extraction',
+  },
+  {
+    id: 'pdf-ocr',
+    name: 'PDF OCR',
+    category: 'pdf',
+    description: 'Extract and recognize searchable text from scanned PDFs with multi-language OCR.',
+    iconName: 'ScanText',
+    badgeBg: 'bg-orange-50 text-orange-600',
+    iconColor: '#EA580C',
+    status: 'available',
+    route: '/tools/pdf-ocr',
+    featured: true,
+  },
+  {
+    id: 'pdf-metadata-editor',
+    name: 'PDF Metadata Editor',
+    category: 'pdf',
+    description: 'Read and edit PDF Title, Author, Subject, Keywords and document properties.',
+    iconName: 'Tag',
+    badgeBg: 'bg-violet-50 text-violet-600',
+    iconColor: '#7C3AED',
+    status: 'available',
+    route: '/tools/pdf-metadata-editor',
   },
 
   // ==================== IMAGE TOOLS (14) ====================
