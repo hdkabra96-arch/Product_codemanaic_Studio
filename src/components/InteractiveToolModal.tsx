@@ -28,6 +28,17 @@ import { PdfRotationDeletionTool } from './pdfTools/PdfRotationDeletionTool';
 import { PdfImageExtractionTool } from './pdfTools/PdfImageExtractionTool';
 import { PdfOcrTool } from './pdfTools/PdfOcrTool';
 import { PdfMetadataEditorTool } from './pdfTools/PdfMetadataEditorTool';
+import { ImageConversionTool } from './imageTools/ImageConversionTool';
+import { ImageCompressorTool } from './imageTools/ImageCompressorTool';
+import { ImageResizerTool } from './imageTools/ImageResizerTool';
+import { ImageEditorTool } from './imageTools/ImageEditorTool';
+import { ImageCropperTool } from './imageTools/ImageCropperTool';
+import { ImageOcrTool } from './imageTools/ImageOcrTool';
+import { ImageBackgroundRemoverTool } from './imageTools/ImageBackgroundRemoverTool';
+import { ImageToPdfTool } from './imageTools/ImageToPdfTool';
+import { ImageWatermarkTool } from './imageTools/ImageWatermarkTool';
+import { ImageEnhancerTool } from './imageTools/ImageEnhancerTool';
+import { ImageMetadataRemoverTool } from './imageTools/ImageMetadataRemoverTool';
 
 // Helper to convert PDF with exact compliance and real measured quality levels
 async function generateConvertedPdf(
@@ -790,6 +801,22 @@ export const InteractiveToolModal: React.FC<InteractiveToolModalProps> = ({
     if (tool.id === 'pdf-image-extraction') return <PdfImageExtractionTool />;
     if (tool.id === 'pdf-ocr') return <PdfOcrTool />;
     if (tool.id === 'pdf-metadata-editor') return <PdfMetadataEditorTool />;
+
+    // Specialized Real Image Processing Engines (All 14 Image Tools)
+    if (tool.id === 'image-conversion') return <ImageConversionTool mode="general" />;
+    if (tool.id === 'jpg-to-png') return <ImageConversionTool mode="jpg-to-png" />;
+    if (tool.id === 'png-to-jpg') return <ImageConversionTool mode="png-to-jpg" />;
+    if (tool.id === 'webp-converter') return <ImageConversionTool mode="webp" />;
+    if (tool.id === 'image-compressor') return <ImageCompressorTool />;
+    if (tool.id === 'image-resizer') return <ImageResizerTool />;
+    if (tool.id === 'image-editor') return <ImageEditorTool />;
+    if (tool.id === 'image-cropper') return <ImageCropperTool />;
+    if (tool.id === 'image-to-text-ocr' || tool.id === 'image-to-text') return <ImageOcrTool />;
+    if (tool.id === 'background-remover') return <ImageBackgroundRemoverTool />;
+    if (tool.id === 'image-to-pdf') return <ImageToPdfTool />;
+    if (tool.id === 'image-watermark') return <ImageWatermarkTool />;
+    if (tool.id === 'image-quality-enhancer') return <ImageEnhancerTool />;
+    if (tool.id === 'image-metadata-remover') return <ImageMetadataRemoverTool />;
 
     // 1. AI Tools (Coming Soon)
     if (tool.status === 'coming_soon') {
