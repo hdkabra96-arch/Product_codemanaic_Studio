@@ -39,6 +39,28 @@ import { ImageToPdfTool } from './imageTools/ImageToPdfTool';
 import { ImageWatermarkTool } from './imageTools/ImageWatermarkTool';
 import { ImageEnhancerTool } from './imageTools/ImageEnhancerTool';
 import { ImageMetadataRemoverTool } from './imageTools/ImageMetadataRemoverTool';
+import { VideoEditorTool } from './videoTools/VideoEditorTool';
+import { VideoConversionTool } from './videoTools/VideoConversionTool';
+import { VideoCompressorTool } from './videoTools/VideoCompressorTool';
+import { VideoTrimmerTool } from './videoTools/VideoTrimmerTool';
+import { VideoMergerTool } from './videoTools/VideoMergerTool';
+import { VideoToGifTool } from './videoTools/VideoToGifTool';
+import { VideoToMp3Tool } from './videoTools/VideoToMp3Tool';
+import { VideoResizerTool } from './videoTools/VideoResizerTool';
+import { VideoCropperTool } from './videoTools/VideoCropperTool';
+import { VideoWatermarkTool } from './videoTools/VideoWatermarkTool';
+import { VideoSubtitlesTool } from './videoTools/VideoSubtitlesTool';
+import { VideoFrameExtractorTool } from './videoTools/VideoFrameExtractorTool';
+import { AudioConverterTool } from './audioTools/AudioConverterTool';
+import { AudioCompressorTool } from './audioTools/AudioCompressorTool';
+import { AudioCutterTool } from './audioTools/AudioCutterTool';
+import { AudioMergerTool } from './audioTools/AudioMergerTool';
+import { AudioMetadataEditorTool } from './audioTools/AudioMetadataEditorTool';
+import { BarcodeGeneratorTool } from './utilityTools/BarcodeGeneratorTool';
+import { TimestampConverterTool } from './utilityTools/TimestampConverterTool';
+import { TextFormatterTool } from './utilityTools/TextFormatterTool';
+import { TextToPdfTool } from './utilityTools/TextToPdfTool';
+import { AiToolRunner } from './aiTools/AiToolRunner';
 
 // Helper to convert PDF with exact compliance and real measured quality levels
 async function generateConvertedPdf(
@@ -60,7 +82,7 @@ async function generateConvertedPdf(
   let pdfDoc: PDFDocument;
 
   try {
-    pdfDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
+    pdfDoc = await PDFDocument.load(fileBuffer.slice(0), { ignoreEncryption: true });
   } catch {
     // If input is not already a valid PDF (e.g. image or plain text), construct a compliant PDF with pdf-lib
     pdfDoc = await PDFDocument.create();
@@ -74,7 +96,7 @@ async function generateConvertedPdf(
       uploadedFile.name.toLowerCase().endsWith('.png')
     ) {
       try {
-        const pngImg = await pdfDoc.embedPng(fileBuffer);
+        const pngImg = await pdfDoc.embedPng(fileBuffer.slice(0));
         const dims = pngImg.scaleToFit(500, 700);
         page.drawImage(pngImg, {
           x: 50,
@@ -93,7 +115,7 @@ async function generateConvertedPdf(
       uploadedFile.name.toLowerCase().endsWith('.jpeg')
     ) {
       try {
-        const jpgImg = await pdfDoc.embedJpg(fileBuffer);
+        const jpgImg = await pdfDoc.embedJpg(fileBuffer.slice(0));
         const dims = jpgImg.scaleToFit(500, 700);
         page.drawImage(jpgImg, {
           x: 50,
@@ -668,7 +690,7 @@ export const InteractiveToolModal: React.FC<InteractiveToolModalProps> = ({
           uploadedFile,
           selectedFormat
         );
-        finalBlob = new Blob([bytes.buffer as ArrayBuffer], {
+        finalBlob = new Blob([bytes as any], {
           type: 'application/pdf',
         });
         outName = convertedName;
@@ -683,7 +705,7 @@ export const InteractiveToolModal: React.FC<InteractiveToolModalProps> = ({
         let pdfDoc: PDFDocument;
 
         try {
-          pdfDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
+          pdfDoc = await PDFDocument.load(fileBuffer.slice(0), { ignoreEncryption: true });
         } catch {
           // If the file is not a valid PDF, construct a clean PDF with pdf-lib
           pdfDoc = await PDFDocument.create();
@@ -716,7 +738,7 @@ export const InteractiveToolModal: React.FC<InteractiveToolModalProps> = ({
         pdfDoc.setModificationDate(new Date());
 
         const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
-        finalBlob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+        finalBlob = new Blob([pdfBytes as any], { type: 'application/pdf' });
       } else {
         // Non-PDF tools
         const fileBuffer = await uploadedFile.arrayBuffer();
@@ -818,7 +840,41 @@ export const InteractiveToolModal: React.FC<InteractiveToolModalProps> = ({
     if (tool.id === 'image-quality-enhancer') return <ImageEnhancerTool />;
     if (tool.id === 'image-metadata-remover') return <ImageMetadataRemoverTool />;
 
-    // 1. AI Tools (Coming Soon)
+    // Specialized Real Video Processing Engines (All 12 Video Tools)
+    if (tool.id === 'video-editor') return <VideoEditorTool />;
+    if (tool.id === 'video-conversion') return <VideoConversionTool />;
+    if (tool.id === 'video-compressor') return <VideoCompressorTool />;
+    if (tool.id === 'video-trimmer') return <VideoTrimmerTool />;
+    if (tool.id === 'video-merger') return <VideoMergerTool />;
+    if (tool.id === 'video-to-gif') return <VideoToGifTool />;
+    if (tool.id === 'video-to-mp3') return <VideoToMp3Tool />;
+    if (tool.id === 'video-resizer') return <VideoResizerTool />;
+    if (tool.id === 'video-cropper') return <VideoCropperTool />;
+    if (tool.id === 'video-watermark') return <VideoWatermarkTool />;
+    if (tool.id === 'video-subtitle-tool' || tool.id === 'video-subtitles') return <VideoSubtitlesTool />;
+    if (tool.id === 'video-frame-extractor') return <VideoFrameExtractorTool />;
+
+    // Specialized Real Audio Processing Engines (All 7 Audio Tools)
+    if (tool.id === 'audio-converter') return <AudioConverterTool mode="general" />;
+    if (tool.id === 'audio-to-mp3') return <AudioConverterTool mode="to-mp3" initialFormat="mp3" />;
+    if (tool.id === 'video-to-audio') return <AudioConverterTool mode="video-to-audio" initialFormat="mp3" />;
+    if (tool.id === 'audio-compressor') return <AudioCompressorTool />;
+    if (tool.id === 'audio-cutter') return <AudioCutterTool />;
+    if (tool.id === 'audio-merger') return <AudioMergerTool />;
+    if (tool.id === 'audio-metadata-editor') return <AudioMetadataEditorTool />;
+
+    // Specialized Real Utility Processing Engines
+    if (tool.id === 'barcode-generator') return <BarcodeGeneratorTool />;
+    if (tool.id === 'timestamp-converter') return <TimestampConverterTool />;
+    if (tool.id === 'text-formatter') return <TextFormatterTool />;
+    if (tool.id === 'text-to-pdf') return <TextToPdfTool />;
+
+    // Specialized Real AI Processing Engines (All 10 AI Tools)
+    if (tool.category === 'ai' || tool.id.startsWith('ai-')) {
+      return <AiToolRunner tool={tool} />;
+    }
+
+    // Status fallback
     if (tool.status === 'coming_soon') {
       return (
         <div className="space-y-6 text-center py-4">

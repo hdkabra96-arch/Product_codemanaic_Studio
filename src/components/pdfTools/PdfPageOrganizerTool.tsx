@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { reorganizePdfPages } from '../../services/pdf/mergeSplitService';
-import { renderPdfThumbnail, getPdfPageCount, fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { renderAllPdfThumbnails, fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
 
 interface PageItem {
   id: string;
@@ -39,18 +39,13 @@ export const PdfPageOrganizerTool: React.FC = () => {
 
     try {
       const buf = await fileToArrayBuffer(selected);
-      const count = await getPdfPageCount(buf);
-      const items: PageItem[] = [];
-
-      for (let i = 1; i <= count; i++) {
-        const thumb = await renderPdfThumbnail(buf, i, 140);
-        items.push({
-          id: `page-${i}`,
-          originalPageNum: i,
-          rotation: 0,
-          thumbnailUrl: thumb,
-        });
-      }
+      const thumbs = await renderAllPdfThumbnails(buf, 140);
+      const items: PageItem[] = thumbs.map((thumb, idx) => ({
+        id: `page-${idx + 1}`,
+        originalPageNum: idx + 1,
+        rotation: 0,
+        thumbnailUrl: thumb,
+      }));
 
       setPages(items);
       setLoadingThumbnails(false);
@@ -99,7 +94,7 @@ export const PdfPageOrganizerTool: React.FC = () => {
         rotation: p.rotation,
       }));
       const { bytes } = await reorganizePdfPages(buf, order);
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      const blob = new Blob([bytes as any], { type: 'application/pdf' });
       setResultBlob(blob);
       setIsProcessing(false);
       try {

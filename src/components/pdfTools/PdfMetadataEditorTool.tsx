@@ -50,7 +50,7 @@ export const PdfMetadataEditorTool: React.FC = () => {
     try {
       const buf = await fileToArrayBuffer(file);
       const bytes = await updatePdfMetadata(buf, metadata);
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      const blob = new Blob([bytes as any], { type: 'application/pdf' });
       setResultBlob(blob);
       setIsProcessing(false);
       try {

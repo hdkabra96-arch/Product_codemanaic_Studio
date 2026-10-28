@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
+import { clonePdfBuffer } from './pdfLibUtils';
 
 export interface WatermarkOptions {
   type: 'text' | 'image';
@@ -33,7 +34,8 @@ export async function applyWatermarkToPdf(
   pdfBuffer: ArrayBuffer,
   options: WatermarkOptions
 ): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const pdfDoc = await PDFDocument.load(safeBuffer, { ignoreEncryption: true });
   const totalPages = pdfDoc.getPageCount();
   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   const color = hexToRgb(options.fontColor || '#D98218');
@@ -152,7 +154,8 @@ export async function saveEditedPdf(
   pdfBuffer: ArrayBuffer,
   annotations: EditorAnnotation[]
 ): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const pdfDoc = await PDFDocument.load(safeBuffer, { ignoreEncryption: true });
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 

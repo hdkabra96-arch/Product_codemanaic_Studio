@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
+import { clonePdfBuffer } from './pdfLibUtils';
 
 export interface PdfMetadata {
   title: string;
@@ -15,7 +16,8 @@ export interface PdfMetadata {
  * Read metadata from a PDF
  */
 export async function readPdfMetadata(pdfBuffer: ArrayBuffer): Promise<PdfMetadata> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const pdfDoc = await PDFDocument.load(safeBuffer, { ignoreEncryption: true });
 
   const keywordsArray = pdfDoc.getKeywords();
   const keywordsStr = Array.isArray(keywordsArray) ? keywordsArray.join(', ') : (keywordsArray || '');
@@ -39,7 +41,8 @@ export async function updatePdfMetadata(
   pdfBuffer: ArrayBuffer,
   metadata: Partial<PdfMetadata>
 ): Promise<Uint8Array> {
-  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const pdfDoc = await PDFDocument.load(safeBuffer, { ignoreEncryption: true });
 
   if (metadata.title !== undefined) pdfDoc.setTitle(metadata.title);
   if (metadata.author !== undefined) pdfDoc.setAuthor(metadata.author);
@@ -71,7 +74,8 @@ export async function protectPdf(
   }
 
   // Load document
-  const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const pdfDoc = await PDFDocument.load(safeBuffer, { ignoreEncryption: true });
 
   // Add protection notice metadata and security signature
   pdfDoc.setProducer('Codemaniac Studio PDF Security Engine (Protected)');
@@ -96,7 +100,8 @@ export async function unlockPdf(
 ): Promise<Uint8Array> {
   try {
     // Attempt loading with provided password
-    const pdfDoc = await PDFDocument.load(pdfBuffer, {
+    const safeBuffer = clonePdfBuffer(pdfBuffer);
+    const pdfDoc = await PDFDocument.load(safeBuffer, {
       // @ts-expect-error - pdf-lib password option
       password: password || '',
       ignoreEncryption: false,
@@ -105,10 +110,11 @@ export async function unlockPdf(
     pdfDoc.setProducer('Codemaniac Studio PDF Unlock Engine (Decrypted)');
     pdfDoc.setModificationDate(new Date());
     return await pdfDoc.save({ useObjectStreams: true });
-  } catch (err) {
+  } catch {
     // If failed, verify with ignoreEncryption if user knows it's permission-locked
     try {
-      const pdfDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+      const safeBuffer2 = clonePdfBuffer(pdfBuffer);
+      const pdfDoc = await PDFDocument.load(safeBuffer2, { ignoreEncryption: true });
       pdfDoc.setProducer('Codemaniac Studio PDF Security Engine (Unlocked)');
       return await pdfDoc.save({ useObjectStreams: true });
     } catch {

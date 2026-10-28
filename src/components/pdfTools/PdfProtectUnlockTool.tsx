@@ -40,7 +40,7 @@ export const PdfProtectUnlockTool: React.FC = () => {
         bytes = await unlockPdf(buf, password);
       }
 
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      const blob = new Blob([bytes as any], { type: 'application/pdf' });
       setResultBlob(blob);
       setIsProcessing(false);
       try {

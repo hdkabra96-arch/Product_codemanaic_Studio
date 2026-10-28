@@ -1,6 +1,6 @@
 import { PDFDocument, degrees } from 'pdf-lib';
 import JSZip from 'jszip';
-import { fileToArrayBuffer } from './pdfLibUtils';
+import { fileToArrayBuffer, clonePdfBuffer } from './pdfLibUtils';
 
 /**
  * Merge multiple PDF files in order into a single PDF
@@ -16,8 +16,9 @@ export async function mergePdfFiles(
   let totalPages = 0;
 
   for (const file of files) {
-    const buffer = file instanceof File ? await fileToArrayBuffer(file) : file;
-    const doc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    const rawBuffer = file instanceof File ? await fileToArrayBuffer(file) : file;
+    const safeBuffer = clonePdfBuffer(rawBuffer);
+    const doc = await PDFDocument.load(safeBuffer, { ignoreEncryption: true });
     const pageIndices = doc.getPageIndices();
     const copiedPages = await mergedPdf.copyPages(doc, pageIndices);
     for (const page of copiedPages) {
@@ -74,7 +75,8 @@ export async function splitPdf(
   mode: 'each_page' | 'ranges',
   rangesStr?: string
 ): Promise<{ blob: Blob; fileName: string; filesCount: number }> {
-  const srcDoc = await PDFDocument.load(data, { ignoreEncryption: true });
+  const safeData = clonePdfBuffer(data);
+  const srcDoc = await PDFDocument.load(safeData, { ignoreEncryption: true });
   const totalPages = srcDoc.getPageCount();
 
   if (totalPages === 0) {
@@ -116,7 +118,7 @@ export async function splitPdf(
       for (const p of copiedPages) outDoc.addPage(p);
 
       const bytes = await outDoc.save({ useObjectStreams: true });
-      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      const blob = new Blob([bytes as any], { type: 'application/pdf' });
       return {
         blob,
         fileName: `${baseName}_range_${rangesStr?.replace(/[^a-zA-Z0-9_-]/g, '_') || 'part'}.pdf`,
@@ -159,7 +161,8 @@ export async function extractPagesFromPdf(
   data: ArrayBuffer,
   pageNumbers: number[]
 ): Promise<{ bytes: Uint8Array; pageCount: number }> {
-  const srcDoc = await PDFDocument.load(data, { ignoreEncryption: true });
+  const safeData = clonePdfBuffer(data);
+  const srcDoc = await PDFDocument.load(safeData, { ignoreEncryption: true });
   const totalPages = srcDoc.getPageCount();
 
   const validPages = pageNumbers.filter((p) => p >= 1 && p <= totalPages);
@@ -187,7 +190,8 @@ export async function deletePagesFromPdf(
   data: ArrayBuffer,
   pageNumbersToDelete: number[]
 ): Promise<{ bytes: Uint8Array; remainingCount: number }> {
-  const doc = await PDFDocument.load(data, { ignoreEncryption: true });
+  const safeData = clonePdfBuffer(data);
+  const doc = await PDFDocument.load(safeData, { ignoreEncryption: true });
   const totalPages = doc.getPageCount();
 
   const deleteSet = new Set(pageNumbersToDelete.filter((p) => p >= 1 && p <= totalPages));
@@ -215,7 +219,8 @@ export async function rotatePagesInPdf(
   rotateAngle: 90 | 180 | 270,
   targetPages: 'all' | number[] = 'all'
 ): Promise<{ bytes: Uint8Array; pageCount: number }> {
-  const doc = await PDFDocument.load(data, { ignoreEncryption: true });
+  const safeData = clonePdfBuffer(data);
+  const doc = await PDFDocument.load(safeData, { ignoreEncryption: true });
   const totalPages = doc.getPageCount();
 
   const pagesToRotate =
@@ -242,7 +247,8 @@ export async function reorganizePdfPages(
   data: ArrayBuffer,
   pageOrder: { pageNum: number; rotation: number }[]
 ): Promise<{ bytes: Uint8Array; pageCount: number }> {
-  const srcDoc = await PDFDocument.load(data, { ignoreEncryption: true });
+  const safeData = clonePdfBuffer(data);
+  const srcDoc = await PDFDocument.load(safeData, { ignoreEncryption: true });
   const outDoc = await PDFDocument.create();
 
   for (const item of pageOrder) {

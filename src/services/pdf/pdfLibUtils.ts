@@ -9,12 +9,37 @@ export async function fileToArrayBuffer(file: File): Promise<ArrayBuffer> {
   }
 }
 
+/**
+ * Clones an ArrayBuffer or Uint8Array into a fresh, isolated Uint8Array
+ * so that workers, pdf-lib, or PDF.js cannot detach or mutate the caller's buffer.
+ */
+export function clonePdfBuffer(data: ArrayBuffer | Uint8Array): Uint8Array {
+  if (data instanceof Uint8Array) {
+    if (data.buffer.byteLength === 0) {
+      throw new Error('PDF data buffer is detached. Please select the file again.');
+    }
+    const copy = new Uint8Array(data.byteLength);
+    copy.set(data);
+    return copy;
+  }
+
+  // ArrayBuffer
+  if (data.byteLength === 0) {
+    throw new Error('PDF data buffer is detached. Please select the file again.');
+  }
+  const copy = new Uint8Array(data.byteLength);
+  copy.set(new Uint8Array(data));
+  return copy;
+}
+
 export async function getPdfPageCount(data: ArrayBuffer | Uint8Array): Promise<number> {
   try {
-    const pdfDoc = await PDFDocument.load(data, { ignoreEncryption: true });
+    const safeData = clonePdfBuffer(data);
+    const pdfDoc = await PDFDocument.load(safeData, { ignoreEncryption: true });
     return pdfDoc.getPageCount();
   } catch {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
+    const safeData = clonePdfBuffer(data);
+    const loadingTask = pdfjsLib.getDocument({ data: safeData });
     const pdf = await loadingTask.promise;
     return pdf.numPages;
   }
@@ -25,7 +50,8 @@ export async function renderPdfPageToCanvas(
   pageNum: number,
   scale: number = 1.0
 ): Promise<HTMLCanvasElement> {
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
+  const safeData = clonePdfBuffer(data);
+  const loadingTask = pdfjsLib.getDocument({ data: safeData });
   const pdf = await loadingTask.promise;
   const page = await pdf.getPage(pageNum);
   const viewport = page.getViewport({ scale });
@@ -56,11 +82,12 @@ export async function renderPdfThumbnail(
   maxWidth: number = 180
 ): Promise<string> {
   try {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
+    const safeData = clonePdfBuffer(data);
+    const loadingTask = pdfjsLib.getDocument({ data: safeData });
     const pdf = await loadingTask.promise;
     const page = await pdf.getPage(pageNum);
     const unscaledViewport = page.getViewport({ scale: 1.0 });
-    const scale = maxWidth / unscaledViewport.width;
+    const scale = maxWidth / Math.max(1, unscaledViewport.width);
     const viewport = page.getViewport({ scale });
 
     const canvas = document.createElement('canvas');
@@ -78,6 +105,49 @@ export async function renderPdfThumbnail(
   }
 }
 
+/**
+ * Renders thumbnails for all pages efficiently in a single PDF.js document session
+ */
+export async function renderAllPdfThumbnails(
+  data: ArrayBuffer | Uint8Array,
+  maxWidth: number = 180,
+  onProgress?: (current: number, total: number) => void
+): Promise<string[]> {
+  const safeData = clonePdfBuffer(data);
+  const loadingTask = pdfjsLib.getDocument({ data: safeData });
+  const pdf = await loadingTask.promise;
+  const total = pdf.numPages;
+  const thumbnails: string[] = [];
+
+  for (let i = 1; i <= total; i++) {
+    try {
+      const page = await pdf.getPage(i);
+      const unscaledViewport = page.getViewport({ scale: 1.0 });
+      const scale = maxWidth / Math.max(1, unscaledViewport.width);
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        // @ts-expect-error - PDF.js typed interface compatibility
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        thumbnails.push(canvas.toDataURL('image/jpeg', 0.85));
+      } else {
+        thumbnails.push('');
+      }
+    } catch {
+      thumbnails.push('');
+    }
+    if (onProgress) {
+      onProgress(i, total);
+    }
+  }
+
+  return thumbnails;
+}
+
 export interface ExtractedPageText {
   page: number;
   text: string;
@@ -87,7 +157,8 @@ export interface ExtractedPageText {
 export async function extractTextFromPdf(
   data: ArrayBuffer | Uint8Array
 ): Promise<ExtractedPageText[]> {
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
+  const safeData = clonePdfBuffer(data);
+  const loadingTask = pdfjsLib.getDocument({ data: safeData });
   const pdf = await loadingTask.promise;
   const results: ExtractedPageText[] = [];
 
@@ -95,10 +166,10 @@ export async function extractTextFromPdf(
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
     const items = textContent.items as Array<{ str: string; hasEOL?: boolean }>;
-    
+
     let currentLine = '';
     const lines: string[] = [];
-    
+
     for (const item of items) {
       if (item.str !== undefined) {
         currentLine += item.str + ' ';
@@ -122,3 +193,4 @@ export async function extractTextFromPdf(
 
   return results;
 }
+

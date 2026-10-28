@@ -4,7 +4,8 @@ import pptxgen from 'pptxgenjs';
 import mammoth from 'mammoth';
 import JSZip from 'jszip';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { extractTextFromPdf, renderPdfPageToCanvas } from './pdfLibUtils';
+import { extractTextFromPdf, renderPdfPageToCanvas, clonePdfBuffer } from './pdfLibUtils';
+import { pdfjsLib } from './pdfJsSetup';
 
 /**
  * PDF to Word (.docx)
@@ -145,8 +146,17 @@ export async function convertPdfToPowerPoint(
   const pres = new pptxgen();
   pres.layout = 'LAYOUT_16x9';
 
-  const pagesText = await extractTextFromPdf(pdfData);
+  const safeBuffer = clonePdfBuffer(pdfData);
+  const pagesText = await extractTextFromPdf(safeBuffer);
   const totalPages = pagesText.length;
+
+  let pdf: any = null;
+  try {
+    const loadingTask = pdfjsLib.getDocument({ data: clonePdfBuffer(pdfData) });
+    pdf = await loadingTask.promise;
+  } catch (err) {
+    console.warn('PDF.js failed in convertPdfToPowerPoint:', err);
+  }
 
   for (let i = 1; i <= totalPages; i++) {
     if (progressCallback) {
@@ -154,22 +164,35 @@ export async function convertPdfToPowerPoint(
     }
 
     const slide = pres.addSlide();
-    
-    // Render page to canvas to place high-fidelity page preview image on slide
-    try {
-      const canvas = await renderPdfPageToCanvas(pdfData, i, 1.5);
-      const dataUrl = canvas.toDataURL('image/png');
 
-      // Place page image cleanly on slide
-      slide.addImage({
-        data: dataUrl,
-        x: 0.5,
-        y: 0.5,
-        w: 9.0,
-        h: 4.5,
-        sizing: { type: 'contain', w: 9.0, h: 4.5 },
-      });
-    } catch {
+    let imageAdded = false;
+    if (pdf) {
+      try {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/png');
+          slide.addImage({
+            data: dataUrl,
+            x: 0.5,
+            y: 0.5,
+            w: 9.0,
+            h: 4.5,
+            sizing: { type: 'contain', w: 9.0, h: 4.5 },
+          });
+          imageAdded = true;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (!imageAdded) {
       // Fallback: place extracted text on slide
       const pageInfo = pagesText[i - 1];
       slide.addText(`Slide ${i}`, { x: 0.5, y: 0.5, fontSize: 20, bold: true });
@@ -277,7 +300,7 @@ export async function convertWordToPdf(docxBuffer: ArrayBuffer): Promise<Blob> {
   }
 
   const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
-  return new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+  return new Blob([pdfBytes as any], { type: 'application/pdf' });
 }
 
 /**
@@ -367,7 +390,7 @@ export async function convertExcelToPdf(xlsxBuffer: ArrayBuffer): Promise<Blob> 
   }
 
   const bytes = await pdfDoc.save({ useObjectStreams: true });
-  return new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+  return new Blob([bytes as any], { type: 'application/pdf' });
 }
 
 /**
@@ -478,5 +501,5 @@ export async function convertPowerPointToPdf(pptxBuffer: ArrayBuffer): Promise<B
   }
 
   const bytes = await pdfDoc.save({ useObjectStreams: true });
-  return new Blob([bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+  return new Blob([bytes as any], { type: 'application/pdf' });
 }

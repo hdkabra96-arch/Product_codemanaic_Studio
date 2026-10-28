@@ -1,5 +1,6 @@
 import { PDFDocument, PDFName } from 'pdf-lib';
-import { renderPdfPageToCanvas, getPdfPageCount } from './pdfLibUtils';
+import { clonePdfBuffer, getPdfPageCount } from './pdfLibUtils';
+import { pdfjsLib } from './pdfJsSetup';
 
 export type CompressionPreset = 'high' | 'medium' | 'low';
 
@@ -19,15 +20,13 @@ export async function compressPdf(
   progressCallback?: (pct: number) => void
 ): Promise<CompressionResult> {
   const originalBytes = pdfBuffer.byteLength;
-  const numPages = await getPdfPageCount(pdfBuffer);
-
-  if (numPages === 0) {
-    throw new Error('PDF has no pages.');
+  if (originalBytes === 0) {
+    throw new Error('PDF buffer is empty or detached.');
   }
 
   // Preset configuration
   let renderScale = 1.0;
-  let jpegQuality = 0.75;
+  let jpegQuality = 0.72;
 
   if (preset === 'high') {
     // Maximum compression: smaller canvas dimension, lower JPEG quality
@@ -35,12 +34,27 @@ export async function compressPdf(
     jpegQuality = 0.55;
   } else if (preset === 'medium') {
     // Balanced compression
-    renderScale = 1.1;
-    jpegQuality = 0.72;
+    renderScale = 1.05;
+    jpegQuality = 0.70;
   } else {
     // Low compression (High quality)
-    renderScale = 1.35;
-    jpegQuality = 0.85;
+    renderScale = 1.30;
+    jpegQuality = 0.82;
+  }
+
+  // Load PDF with PDF.js once using a safely cloned buffer
+  let pdf: any = null;
+  try {
+    const safeData = clonePdfBuffer(pdfBuffer);
+    const loadingTask = pdfjsLib.getDocument({ data: safeData });
+    pdf = await loadingTask.promise;
+  } catch (err) {
+    console.warn('PDF.js failed to parse PDF for raster downsampling:', err);
+  }
+
+  const numPages = pdf ? pdf.numPages : await getPdfPageCount(clonePdfBuffer(pdfBuffer));
+  if (numPages === 0) {
+    throw new Error('PDF has no pages.');
   }
 
   const outDoc = await PDFDocument.create();
@@ -50,35 +64,52 @@ export async function compressPdf(
       progressCallback(Math.round((i / numPages) * 85));
     }
 
-    try {
-      // Render page to canvas
-      const canvas = await renderPdfPageToCanvas(pdfBuffer, i, renderScale);
-      const dataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+    let pageEmbedded = false;
 
-      // Embed downsampled JPEG into outDoc
-      const base64Data = dataUrl.split(',')[1];
-      const binaryStr = atob(base64Data);
-      const len = binaryStr.length;
-      const u8Array = new Uint8Array(len);
-      for (let j = 0; j < len; j++) {
-        u8Array[j] = binaryStr.charCodeAt(j);
+    if (pdf) {
+      try {
+        const page = await pdf.getPage(i);
+        const viewport = page.getViewport({ scale: renderScale });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          const dataUrl = canvas.toDataURL('image/jpeg', jpegQuality);
+
+          const base64Data = dataUrl.split(',')[1];
+          const binaryStr = atob(base64Data);
+          const len = binaryStr.length;
+          const u8Array = new Uint8Array(len);
+          for (let j = 0; j < len; j++) {
+            u8Array[j] = binaryStr.charCodeAt(j);
+          }
+
+          const img = await outDoc.embedJpg(u8Array);
+          const targetWidth = canvas.width / renderScale;
+          const targetHeight = canvas.height / renderScale;
+
+          const outPage = outDoc.addPage([targetWidth, targetHeight]);
+          outPage.drawImage(img, {
+            x: 0,
+            y: 0,
+            width: targetWidth,
+            height: targetHeight,
+          });
+          pageEmbedded = true;
+        }
+      } catch (pageErr) {
+        console.warn(`Page ${i} rasterization failed, falling back to direct copy:`, pageErr);
       }
+    }
 
-      const img = await outDoc.embedJpg(u8Array);
-      // Dimensions in standard PDF points (A4 or page aspect ratio)
-      const targetWidth = canvas.width / renderScale;
-      const targetHeight = canvas.height / renderScale;
-
-      const page = outDoc.addPage([targetWidth, targetHeight]);
-      page.drawImage(img, {
-        x: 0,
-        y: 0,
-        width: targetWidth,
-        height: targetHeight,
-      });
-    } catch {
-      // Fallback: copy page directly
-      const srcDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
+    if (!pageEmbedded) {
+      // Fallback: copy page directly using cloned buffer
+      const safeSrcBuffer = clonePdfBuffer(pdfBuffer);
+      const srcDoc = await PDFDocument.load(safeSrcBuffer, { ignoreEncryption: true });
       const [copied] = await outDoc.copyPages(srcDoc, [i - 1]);
       outDoc.addPage(copied);
     }
@@ -100,18 +131,37 @@ export async function compressPdf(
   const compressedBytes = bytes.byteLength;
 
   // If compression didn't reduce file size (e.g. text-only PDF already tiny),
-  // return direct stream-compressed original doc
+  // attempt stream compression on original doc
   if (compressedBytes >= originalBytes) {
-    const srcDoc = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-    const cleanBytes = await srcDoc.save({ useObjectStreams: true });
-    const finalLen = cleanBytes.byteLength;
-    const saved = Math.max(0, Math.round(((originalBytes - finalLen) / originalBytes) * 100));
+    try {
+      const safeSrcBuffer = clonePdfBuffer(pdfBuffer);
+      const srcDoc = await PDFDocument.load(safeSrcBuffer, { ignoreEncryption: true });
+      const cleanBytes = await srcDoc.save({ useObjectStreams: true });
+      const finalLen = cleanBytes.byteLength;
+
+      if (finalLen < originalBytes) {
+        const saved = Math.max(0, Math.round(((originalBytes - finalLen) / originalBytes) * 100));
+        return {
+          originalBytes,
+          compressedBytes: finalLen,
+          percentageSaved: saved,
+          bytes: cleanBytes,
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    // Return the smaller of the two or original
+    const chosenBytes = compressedBytes < originalBytes ? bytes : clonePdfBuffer(pdfBuffer);
+    const finalSize = chosenBytes.byteLength;
+    const saved = Math.max(0, Math.round(((originalBytes - finalSize) / originalBytes) * 100));
 
     return {
       originalBytes,
-      compressedBytes: finalLen,
+      compressedBytes: finalSize,
       percentageSaved: saved,
-      bytes: cleanBytes,
+      bytes: chosenBytes,
     };
   }
 
@@ -127,3 +177,4 @@ export async function compressPdf(
     bytes,
   };
 }
+

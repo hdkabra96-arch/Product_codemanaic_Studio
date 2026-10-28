@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
 import { createWorker } from 'tesseract.js';
-import { renderPdfPageToCanvas, getPdfPageCount } from './pdfLibUtils';
+import { clonePdfBuffer } from './pdfLibUtils';
+import { pdfjsLib } from './pdfJsSetup';
 
 export interface ExtractedImageItem {
   name: string;
@@ -16,7 +17,11 @@ export async function extractImagesFromPdf(
   baseName: string,
   progressCallback?: (pct: number) => void
 ): Promise<{ images: ExtractedImageItem[]; zipBlob: Blob }> {
-  const numPages = await getPdfPageCount(pdfBuffer);
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const loadingTask = pdfjsLib.getDocument({ data: safeBuffer });
+  const pdf = await loadingTask.promise;
+  const numPages = pdf.numPages;
+
   const images: ExtractedImageItem[] = [];
   const zip = new JSZip();
 
@@ -26,8 +31,18 @@ export async function extractImagesFromPdf(
     }
 
     try {
-      // High-res render of page image
-      const canvas = await renderPdfPageToCanvas(pdfBuffer, i, 2.0);
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) continue;
+
+      // @ts-expect-error - PDF.js typed interface compatibility
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
       const dataUrl = canvas.toDataURL('image/png');
       const base64Data = dataUrl.split(',')[1];
       const binaryStr = atob(base64Data);
@@ -74,7 +89,11 @@ export async function performOcrOnPdf(
   language: string = 'eng',
   progressCallback?: (pct: number, statusText: string) => void
 ): Promise<OcrResult> {
-  const numPages = await getPdfPageCount(pdfBuffer);
+  const safeBuffer = clonePdfBuffer(pdfBuffer);
+  const loadingTask = pdfjsLib.getDocument({ data: safeBuffer });
+  const pdf = await loadingTask.promise;
+  const numPages = pdf.numPages;
+
   const results: { page: number; text: string; confidence: number }[] = [];
 
   if (progressCallback) progressCallback(5, 'Initializing OCR engine...');
@@ -90,7 +109,17 @@ export async function performOcrOnPdf(
         );
       }
 
-      const canvas = await renderPdfPageToCanvas(pdfBuffer, i, 2.0);
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) continue;
+
+      // @ts-expect-error - PDF.js typed interface compatibility
+      await page.render({ canvasContext: ctx, viewport }).promise;
       const dataUrl = canvas.toDataURL('image/png');
 
       const ret = await worker.recognize(dataUrl);

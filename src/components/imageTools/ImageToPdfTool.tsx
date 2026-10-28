@@ -107,7 +107,7 @@ export const ImageToPdfTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!resultPdf) return;
-    const blob = new Blob([resultPdf.bytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+    const blob = new Blob([resultPdf.bytes as any], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
