@@ -48,12 +48,22 @@ import {
   Search,
   ArrowRight,
   Clock3,
+  Unlock,
+  Wrench,
+  GitCompare,
+  Globe,
+  FileSignature,
+  FileCode2,
+  FileType2,
+  Sheet,
+  MonitorPlay,
+  ShieldCheck,
 } from 'lucide-react';
 import { ToolItem } from '../types';
 
 interface ToolCardProps {
   tool: ToolItem;
-  onSelectTool: (tool: ToolItem) => void;
+  onSelectTool?: (tool: ToolItem) => void;
 }
 
 export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
@@ -153,6 +163,26 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
         return <HelpCircle {...props} />;
       case 'PenTool':
         return <PenTool {...props} />;
+      case 'FileSignature':
+        return <FileSignature {...props} />;
+      case 'Unlock':
+        return <Unlock {...props} />;
+      case 'Wrench':
+        return <Wrench {...props} />;
+      case 'GitCompare':
+        return <GitCompare {...props} />;
+      case 'Globe':
+        return <Globe {...props} />;
+      case 'ShieldCheck':
+        return <ShieldCheck {...props} />;
+      case 'FileCode2':
+        return <FileCode2 {...props} />;
+      case 'FileType2':
+        return <FileType2 {...props} />;
+      case 'Sheet':
+        return <Sheet {...props} />;
+      case 'MonitorPlay':
+        return <MonitorPlay {...props} />;
       case 'Search':
         return <Search {...props} />;
       default:
@@ -163,16 +193,28 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
   const isComingSoon = tool.status === 'coming_soon';
 
   return (
-    <div
-      onClick={() => onSelectTool(tool)}
-      className="group relative bg-white rounded-2xl p-6 border border-[#E9DCC8] shadow-[0_4px_20px_rgba(217,130,24,0.05)] hover:shadow-[0_8px_30px_rgba(217,130,24,0.14)] hover:border-[#D98218] hover:-translate-y-1 transition-all duration-250 cursor-pointer flex flex-col justify-between"
+    <a
+      href={`#/tools/${tool.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={() => {
+        onSelectTool?.(tool);
+      }}
+      className="group relative bg-white rounded-2xl p-6 border border-[#E9DCC8] shadow-[0_4px_20px_rgba(217,130,24,0.05)] hover:shadow-[0_8px_30px_rgba(217,130,24,0.14)] hover:border-[#D98218] hover:-translate-y-1 transition-all duration-250 cursor-pointer flex flex-col justify-between block no-underline"
     >
       <div>
-        {/* Top Icon Badge */}
-        <div
-          className={`w-12 h-12 rounded-xl flex items-center justify-center ${tool.badgeBg} mb-4 transition-transform group-hover:scale-105`}
-        >
-          {renderIcon()}
+        {/* Top Header Row with Icon and optional Badge */}
+        <div className="flex items-start justify-between mb-4">
+          <div
+            className={`w-12 h-12 rounded-xl flex items-center justify-center ${tool.badgeBg} transition-transform group-hover:scale-105`}
+          >
+            {renderIcon()}
+          </div>
+          {tool.badge && (
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold tracking-wide uppercase bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]">
+              {tool.badge}
+            </span>
+          )}
         </div>
 
         {/* Title */}
@@ -194,15 +236,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
             <span>Coming Soon</span>
           </span>
         ) : (
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-[#102A43] bg-transparent border border-[#E9DCC8] group-hover:border-[#D98218] group-hover:text-[#D98218] group-hover:bg-[#FFF3DF]/40 transition-all cursor-pointer"
+          <span
+            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold text-[#102A43] bg-transparent border border-[#E9DCC8] group-hover:border-[#D98218] group-hover:text-[#D98218] group-hover:bg-[#FFF3DF]/40 transition-all"
           >
             <span>Try Now</span>
             <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
-          </button>
+          </span>
         )}
       </div>
-    </div>
+    </a>
   );
 };

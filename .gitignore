@@ -3,8 +3,7 @@ build/
 dist/
 coverage/
 .DS_Store
-._*
-.aistudio/
 *.log
 .env*
 !.env.example
+.aistudio/

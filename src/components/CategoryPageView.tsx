@@ -34,15 +34,31 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
   onOpenLetsTalk,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all');
   const categoryInfo = CATEGORIES_DATA[category];
 
   const categoryTools = ALL_TOOLS.filter((t) => t.category === category);
-  const filteredTools = categoryTools.filter(
-    (t) =>
+  const filteredTools = categoryTools.filter((t) => {
+    const matchesSub =
+      selectedSubCategory === 'all' ||
+      !t.subCategory ||
+      t.subCategory === selectedSubCategory;
+    const matchesSearch =
       searchQuery.trim() === '' ||
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      t.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSub && matchesSearch;
+  });
+
+  const PDF_SUB_CATEGORIES = [
+    { id: 'all', label: 'All' },
+    { id: 'organize', label: 'Organize PDF' },
+    { id: 'optimize', label: 'Optimize PDF' },
+    { id: 'convert', label: 'Convert PDF' },
+    { id: 'edit', label: 'Edit PDF' },
+    { id: 'security', label: 'PDF Security' },
+    { id: 'intelligence', label: 'PDF Intelligence' },
+  ];
 
   return (
     <div className="space-y-16 sm:space-y-20 pb-16">
@@ -182,6 +198,67 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
               placeholder={categoryInfo.searchPlaceholder}
             />
           </div>
+
+          {/* Subcategory Filter Pills for PDF Suite (matching iLovePDF) */}
+          {category === 'pdf' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                {PDF_SUB_CATEGORIES.map((sub) => {
+                  const isSelected = selectedSubCategory === sub.id;
+                  const count =
+                    sub.id === 'all'
+                      ? categoryTools.length
+                      : categoryTools.filter((t) => t.subCategory === sub.id).length;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => setSelectedSubCategory(sub.id)}
+                      className={`px-4 py-2 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 shadow-xs ${
+                        isSelected
+                          ? 'bg-[#102A43] text-white shadow-md'
+                          : 'bg-white text-[#61758A] border border-[#E9DCC8] hover:border-[#D98218] hover:text-[#D98218]'
+                      }`}
+                    >
+                      <span>{sub.label}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold ${
+                          isSelected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[#FAF5EC] text-[#61758A]'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Filter Indicator */}
+              <div className="flex items-center justify-between text-xs text-[#61758A] px-1">
+                <span>
+                  Showing <strong className="text-[#102A43]">{filteredTools.length}</strong> of{' '}
+                  <strong className="text-[#102A43]">{categoryTools.length}</strong> PDF tools
+                  {selectedSubCategory !== 'all' && (
+                    <> in <span className="text-[#D98218] font-bold">{PDF_SUB_CATEGORIES.find((s) => s.id === selectedSubCategory)?.label}</span></>
+                  )}
+                </span>
+                {(selectedSubCategory !== 'all' || searchQuery.trim() !== '') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSubCategory('all');
+                      setSearchQuery('');
+                    }}
+                    className="text-[#D98218] hover:underline font-semibold cursor-pointer"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tools Grid matching screenshots: 4 to 5 cards per row on desktop */}
           {filteredTools.length === 0 ? (

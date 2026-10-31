@@ -4,9 +4,15 @@ import confetti from 'canvas-confetti';
 import { protectPdf, unlockPdf } from '../../services/pdf/securityMetadataService';
 import { fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
 
-export const PdfProtectUnlockTool: React.FC = () => {
+interface PdfProtectUnlockToolProps {
+  initialMode?: 'protect' | 'unlock';
+}
+
+export const PdfProtectUnlockTool: React.FC<PdfProtectUnlockToolProps> = ({
+  initialMode = 'protect',
+}) => {
   const [file, setFile] = useState<File | null>(null);
-  const [activeTab, setActiveTab] = useState<'protect' | 'unlock'>('protect');
+  const [activeTab, setActiveTab] = useState<'protect' | 'unlock'>(initialMode);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);

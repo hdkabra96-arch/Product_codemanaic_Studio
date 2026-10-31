@@ -56,7 +56,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search across all 72 Codemaniac tools (e.g. PDF to Word, QR, JSON, Video)..."
+            placeholder={`Search across all ${ALL_TOOLS.length} Codemaniac tools (e.g. Merge PDF, Sign PDF, PDF to Word)...`}
             className="w-full bg-transparent text-sm sm:text-base text-[#102A43] placeholder-[#61758A] focus:outline-none"
           />
           {query && (
@@ -117,7 +117,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               <div
                 key={tool.id}
                 onClick={() => {
-                  onSelectTool(tool);
+                  window.open(`#/tools/${tool.id}`, '_blank');
                   onClose();
                 }}
                 className="group p-3 rounded-2xl bg-white hover:bg-[#FFF3DF]/50 border border-[#E9DCC8] hover:border-[#D98218] transition-all cursor-pointer flex items-center justify-between gap-4"

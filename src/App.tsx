@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ShowcasePageView } from './components/ShowcasePageView';
 import { CategoryPageView } from './components/CategoryPageView';
+import { DedicatedToolPageView } from './components/DedicatedToolPageView';
 import { OtherPages } from './components/OtherPages';
 import { InteractiveToolModal } from './components/InteractiveToolModal';
 import { LetsTalkModal } from './components/LetsTalkModal';
@@ -20,43 +21,71 @@ export default function App() {
   // Sync hash routing on initial load and hashchange
   useEffect(() => {
     const handleHash = () => {
-      const hash = window.location.hash.replace('#/', '').toLowerCase();
+      const rawHash = window.location.hash.replace('#/', '').toLowerCase();
 
-      if (hash.startsWith('products/')) {
-        const cat = hash.replace('products/', '') as ToolCategory;
-        if (['pdf', 'image', 'video', 'audio', 'utility', 'ai'].includes(cat)) {
-          setCurrentPage('category');
-          setActiveCategory(cat);
+      // Check if direct tool link (e.g. #/tools/pdf-merge or #/tools/merge-pdf)
+      if (rawHash.startsWith('tools/')) {
+        const toolId = rawHash.replace(/^tools\//, '').replace(/^\//, '');
+        const found = ALL_TOOLS.find(
+          (t) =>
+            t.id.toLowerCase() === toolId ||
+            t.route.toLowerCase() === `/${rawHash}` ||
+            t.route.toLowerCase() === `/tools/${toolId}` ||
+            t.id.toLowerCase() === toolId.replace(/_/g, '-')
+        );
+        if (found) {
+          setSelectedTool(found);
+          setCurrentPage('tool');
+          setActiveCategory(found.category);
+          document.title = `${found.name} - Codemaniac Studio`;
           return;
         }
       }
 
-      if (hash === 'product' || hash === 'products') {
+      // Also support direct iLovePDF aliases (e.g. #/merge_pdf or #/pdf-merge)
+      const directTool = ALL_TOOLS.find(
+        (t) =>
+          t.id.toLowerCase() === rawHash ||
+          t.id.toLowerCase() === rawHash.replace(/_/g, '-') ||
+          t.route.toLowerCase() === `/${rawHash}` ||
+          (rawHash.endsWith('_pdf') && t.id.toLowerCase() === `pdf-${rawHash.replace('_pdf', '')}`)
+      );
+      if (directTool) {
+        setSelectedTool(directTool);
+        setCurrentPage('tool');
+        setActiveCategory(directTool.category);
+        document.title = `${directTool.name} - Codemaniac Studio`;
+        return;
+      }
+
+      if (rawHash.startsWith('products/')) {
+        const cat = rawHash.replace('products/', '') as ToolCategory;
+        if (['pdf', 'image', 'video', 'audio', 'utility', 'ai'].includes(cat)) {
+          setCurrentPage('category');
+          setActiveCategory(cat);
+          document.title = `${cat.toUpperCase()} Tools - Codemaniac Studio`;
+          return;
+        }
+      }
+
+      if (rawHash === 'product' || rawHash === 'products') {
         setCurrentPage('product');
         setActiveCategory('all');
+        document.title = 'All Tools & Products - Codemaniac Studio';
         return;
       }
 
-      if (hash === 'home' || hash === '') {
-        setCurrentPage('product'); // Home directs to showcase as requested
+      if (rawHash === 'home' || rawHash === '') {
+        setCurrentPage('product');
         setActiveCategory('all');
+        document.title = 'Codemaniac Studio - Online Tools Platform';
         return;
       }
 
-      if (['service', 'education', 'about', 'blog', 'contact', 'privacy'].includes(hash)) {
-        setCurrentPage(hash as PageView);
+      if (['service', 'education', 'about', 'blog', 'contact', 'privacy'].includes(rawHash)) {
+        setCurrentPage(rawHash as PageView);
+        document.title = `${rawHash.toUpperCase()} - Codemaniac Studio`;
         return;
-      }
-
-      // Check if direct tool link
-      if (hash.startsWith('tools/')) {
-        const toolRoute = `/${hash}`;
-        const found = ALL_TOOLS.find((t) => t.route === toolRoute);
-        if (found) {
-          setSelectedTool(found);
-          setCurrentPage('category');
-          setActiveCategory(found.category);
-        }
       }
     };
 
@@ -108,7 +137,7 @@ export default function App() {
   };
 
   const handleSelectTool = (tool: ToolItem) => {
-    setSelectedTool(tool);
+    window.open(`#/tools/${tool.id}`, '_blank');
   };
 
   return (
@@ -145,7 +174,16 @@ export default function App() {
           />
         )}
 
-        {currentPage !== 'product' && currentPage !== 'category' && (
+        {currentPage === 'tool' && selectedTool && (
+          <DedicatedToolPageView
+            tool={selectedTool}
+            onNavigate={handleNavigate}
+            onSelectTool={handleSelectTool}
+            onOpenLetsTalk={() => setIsLetsTalkOpen(true)}
+          />
+        )}
+
+        {currentPage !== 'product' && currentPage !== 'category' && currentPage !== 'tool' && (
           <OtherPages
             page={currentPage}
             onNavigate={handleNavigate}
@@ -161,7 +199,7 @@ export default function App() {
       />
 
       {/* Interactive Tool Modal / Studio */}
-      {selectedTool && (
+      {selectedTool && currentPage !== 'tool' && (
         <InteractiveToolModal
           tool={selectedTool}
           onClose={() => setSelectedTool(null)}

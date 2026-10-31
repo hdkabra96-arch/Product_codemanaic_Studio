@@ -4,6 +4,7 @@ export interface ToolItem {
   id: string;
   name: string;
   category: Exclude<ToolCategory, 'all'>;
+  subCategory?: string;
   description: string;
   iconName: string;
   badgeBg: string;
@@ -11,6 +12,7 @@ export interface ToolItem {
   status: 'available' | 'coming_soon';
   route: string;
   featured?: boolean;
+  badge?: string;
 }
 
 export interface CategoryInfo {
@@ -43,6 +45,7 @@ export type PageView =
   | 'home'
   | 'product'
   | 'category'
+  | 'tool'
   | 'service'
   | 'education'
   | 'about'
