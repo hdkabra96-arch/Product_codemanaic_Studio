@@ -67,6 +67,14 @@ export interface VideoCropSettings {
   height: number;
 }
 
+export interface VideoBlurRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type?: 'blur' | 'pixelate' | 'blackout';
+}
+
 export interface RenderVideoOptions {
   file: File | Blob;
   startTime?: number; // seconds
@@ -84,6 +92,12 @@ export interface RenderVideoOptions {
   fps?: number; // default 30
   volume?: number; // 0 to 1, or > 1
   outputMimeType?: string;
+  rotation?: 0 | 90 | 180 | 270;
+  flipHorizontal?: boolean;
+  flipVertical?: boolean;
+  playbackRate?: number;
+  muteAudio?: boolean;
+  blurRegions?: VideoBlurRegion[];
   onProgress?: (progress: { percent: number; currentTime: number; duration: number }) => void;
   signal?: AbortSignal;
 }
@@ -418,9 +432,13 @@ export async function renderProcessedVideo(options: RenderVideoOptions): Promise
   const origW = video.videoWidth || 1280;
   const origH = video.videoHeight || 720;
 
+  const isRotatedQuarter = options.rotation === 90 || options.rotation === 270;
+  const naturalOutW = isRotatedQuarter ? origH : origW;
+  const naturalOutH = isRotatedQuarter ? origW : origH;
+
   // Determine canvas output dimensions
-  let outW = options.targetWidth || (options.crop ? options.crop.width : origW);
-  let outH = options.targetHeight || (options.crop ? options.crop.height : origH);
+  let outW = options.targetWidth || (options.crop ? options.crop.width : naturalOutW);
+  let outH = options.targetHeight || (options.crop ? options.crop.height : naturalOutH);
   // Ensure dimensions are even numbers for video encoder compatibility
   outW = Math.round(outW / 2) * 2;
   outH = Math.round(outH / 2) * 2;
@@ -441,7 +459,7 @@ export async function renderProcessedVideo(options: RenderVideoOptions): Promise
   let audioDestination: MediaStreamAudioDestinationNode | null = null;
   const combinedStream = new MediaStream([...canvasStream.getVideoTracks()]);
 
-  const volume = options.volume ?? 1;
+  const volume = options.muteAudio ? 0 : (options.volume ?? 1);
   if (volume > 0) {
     try {
       audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -528,8 +546,21 @@ export async function renderProcessedVideo(options: RenderVideoOptions): Promise
     // 2. Set visual filter
     ctx.filter = buildFilterString(options.filters);
 
-    // 3. Draw video frame with fit mode or crop
-    if (options.crop) {
+    // 3. Draw video frame with rotation/flip, fit mode, or crop
+    const rot = options.rotation || 0;
+    const flipH = options.flipHorizontal || false;
+    const flipV = options.flipVertical || false;
+
+    if (rot !== 0 || flipH || flipV) {
+      ctx.save();
+      ctx.translate(outW / 2, outH / 2);
+      ctx.rotate((rot * Math.PI) / 180);
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      const drawW = isRotatedQuarter ? outH : outW;
+      const drawH = isRotatedQuarter ? outW : outH;
+      ctx.drawImage(video, -drawW / 2, -drawH / 2, drawW, drawH);
+      ctx.restore();
+    } else if (options.crop) {
       const c = options.crop;
       ctx.drawImage(video, c.x, c.y, c.width, c.height, 0, 0, outW, outH);
     } else {
@@ -556,6 +587,49 @@ export async function renderProcessedVideo(options: RenderVideoOptions): Promise
 
     // Reset filter for overlays
     ctx.filter = 'none';
+
+    // 3.5 Apply Watermark Removal / Blur Regions if specified
+    if (options.blurRegions && options.blurRegions.length > 0) {
+      for (const region of options.blurRegions) {
+        const rx = Math.max(0, region.x);
+        const ry = Math.max(0, region.y);
+        const rw = Math.min(outW - rx, region.width);
+        const rh = Math.min(outH - ry, region.height);
+        if (rw <= 0 || rh <= 0) continue;
+
+        if (region.type === 'blackout') {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(rx, ry, rw, rh);
+        } else if (region.type === 'pixelate') {
+          const blockSize = 12;
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = Math.max(1, Math.floor(rw / blockSize));
+          tempCanvas.height = Math.max(1, Math.floor(rh / blockSize));
+          const tCtx = tempCanvas.getContext('2d');
+          if (tCtx) {
+            tCtx.imageSmoothingEnabled = false;
+            tCtx.drawImage(canvas, rx, ry, rw, rh, 0, 0, tempCanvas.width, tempCanvas.height);
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(tempCanvas, 0, 0, tempCanvas.width, tempCanvas.height, rx, ry, rw, rh);
+            ctx.restore();
+          }
+        } else {
+          // Gaussian blur
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = rw;
+          tempCanvas.height = rh;
+          const tCtx = tempCanvas.getContext('2d');
+          if (tCtx) {
+            tCtx.drawImage(canvas, rx, ry, rw, rh, 0, 0, rw, rh);
+            ctx.save();
+            ctx.filter = 'blur(14px)';
+            ctx.drawImage(tempCanvas, rx, ry, rw, rh);
+            ctx.restore();
+          }
+        }
+      }
+    }
 
     // 4. Draw Watermark if present
     if (options.watermark) {
@@ -743,6 +817,9 @@ export async function renderProcessedVideo(options: RenderVideoOptions): Promise
       mediaRecorder.start(100);
 
       video.muted = volume === 0 || !audioContext;
+      if (options.playbackRate && options.playbackRate > 0) {
+        video.playbackRate = options.playbackRate;
+      }
       await video.play();
 
       const loop = () => {

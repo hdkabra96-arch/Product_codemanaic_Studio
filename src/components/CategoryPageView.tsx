@@ -69,11 +69,21 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
     { id: 'security', label: 'Security' },
   ];
 
+  const VIDEO_SUB_CATEGORIES = [
+    { id: 'all', label: 'All' },
+    { id: 'edit', label: 'Edit & Trim' },
+    { id: 'optimize', label: 'Optimize & Resize' },
+    { id: 'convert', label: 'Convert' },
+    { id: 'effects', label: 'Effects & Audio' },
+  ];
+
   const activeSubCategories =
     category === 'pdf'
       ? PDF_SUB_CATEGORIES
       : category === 'image'
       ? IMAGE_SUB_CATEGORIES
+      : category === 'video'
+      ? VIDEO_SUB_CATEGORIES
       : null;
 
   return (

@@ -71,6 +71,12 @@ import { VideoCropperTool } from './videoTools/VideoCropperTool';
 import { VideoWatermarkTool } from './videoTools/VideoWatermarkTool';
 import { VideoSubtitlesTool } from './videoTools/VideoSubtitlesTool';
 import { VideoFrameExtractorTool } from './videoTools/VideoFrameExtractorTool';
+import { VideoRotateTool } from './videoTools/VideoRotateTool';
+import { VideoSpeedTool } from './videoTools/VideoSpeedTool';
+import { VideoRemoveAudioTool } from './videoTools/VideoRemoveAudioTool';
+import { VideoRemoveWatermarkTool } from './videoTools/VideoRemoveWatermarkTool';
+import { VideoFiltersTool } from './videoTools/VideoFiltersTool';
+import { VideoCompressResizeTool } from './videoTools/VideoCompressResizeTool';
 
 // Audio Tools
 import { AudioConverterTool } from './audioTools/AudioConverterTool';
@@ -457,7 +463,7 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'blur-face') return <BlurFaceTool />;
   if (tool.id === 'html-to-image') return <HtmlToImageTool />;
 
-  // 3. Specialized Real Video Processing Engines (All 12 Video Tools)
+  // 3. Specialized Real Video Processing Engines (All 18 Video Tools)
   if (tool.id === 'video-editor') return <VideoEditorTool />;
   if (tool.id === 'video-conversion') return <VideoConversionTool />;
   if (tool.id === 'video-compressor') return <VideoCompressorTool />;
@@ -470,6 +476,12 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'video-watermark') return <VideoWatermarkTool />;
   if (tool.id === 'video-subtitle-tool' || tool.id === 'video-subtitles') return <VideoSubtitlesTool />;
   if (tool.id === 'video-frame-extractor') return <VideoFrameExtractorTool />;
+  if (tool.id === 'video-rotate' || tool.id === 'rotate-video') return <VideoRotateTool />;
+  if (tool.id === 'video-speed' || tool.id === 'change-speed') return <VideoSpeedTool />;
+  if (tool.id === 'video-remove-audio' || tool.id === 'remove-audio') return <VideoRemoveAudioTool />;
+  if (tool.id === 'video-remove-watermark' || tool.id === 'remove-watermark') return <VideoRemoveWatermarkTool />;
+  if (tool.id === 'video-filters' || tool.id === 'video-effects') return <VideoFiltersTool />;
+  if (tool.id === 'video-compress-resize' || tool.id === 'compress-resize') return <VideoCompressResizeTool />;
 
   // 4. Specialized Real Audio Processing Engines (All 7 Audio Tools)
   if (tool.id === 'audio-converter') return <AudioConverterTool mode="general" />;

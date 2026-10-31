@@ -60,6 +60,11 @@ import {
   ShieldCheck,
   Smile,
   EyeOff,
+  ArrowUpRight,
+  RotateCw,
+  Gauge,
+  VolumeX,
+  Eraser,
 } from 'lucide-react';
 import { ToolItem } from '../types';
 
@@ -191,6 +196,14 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
         return <Smile {...props} />;
       case 'EyeOff':
         return <EyeOff {...props} />;
+      case 'RotateCw':
+        return <RotateCw {...props} />;
+      case 'Gauge':
+        return <Gauge {...props} />;
+      case 'VolumeX':
+        return <VolumeX {...props} />;
+      case 'Eraser':
+        return <Eraser {...props} />;
       default:
         return <Bot {...props} />;
     }
@@ -209,18 +222,21 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
       className="group relative bg-white rounded-2xl p-6 border border-[#E9DCC8] shadow-[0_4px_20px_rgba(217,130,24,0.05)] hover:shadow-[0_8px_30px_rgba(217,130,24,0.14)] hover:border-[#D98218] hover:-translate-y-1 transition-all duration-250 cursor-pointer flex flex-col justify-between block no-underline"
     >
       <div>
-        {/* Top Header Row with Icon and optional Badge */}
+        {/* Top Header Row with Icon, optional Badge, and open arrow */}
         <div className="flex items-start justify-between mb-4">
           <div
             className={`w-12 h-12 rounded-xl flex items-center justify-center ${tool.badgeBg} transition-transform group-hover:scale-105`}
           >
             {renderIcon()}
           </div>
-          {tool.badge && (
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold tracking-wide uppercase bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]">
-              {tool.badge}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {tool.badge && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold tracking-wide uppercase bg-[#E0F2FE] text-[#0284C7] border border-[#BAE6FD]">
+                {tool.badge}
+              </span>
+            )}
+            <ArrowUpRight className="w-4 h-4 text-[#94A3B8] group-hover:text-[#D98218] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
+          </div>
         </div>
 
         {/* Title */}
