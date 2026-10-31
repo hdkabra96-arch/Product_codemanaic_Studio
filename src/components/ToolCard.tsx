@@ -64,6 +64,9 @@ import {
   RotateCw,
   Gauge,
   VolumeX,
+  Volume2,
+  Mic,
+  MicOff,
   Eraser,
 } from 'lucide-react';
 import { ToolItem } from '../types';
@@ -201,7 +204,12 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
       case 'Gauge':
         return <Gauge {...props} />;
       case 'VolumeX':
+      case 'MicOff':
         return <VolumeX {...props} />;
+      case 'Volume2':
+        return <Volume2 {...props} />;
+      case 'Mic':
+        return <Mic {...props} />;
       case 'Eraser':
         return <Eraser {...props} />;
       default:

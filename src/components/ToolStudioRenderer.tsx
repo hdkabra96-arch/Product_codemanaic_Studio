@@ -84,6 +84,11 @@ import { AudioCompressorTool } from './audioTools/AudioCompressorTool';
 import { AudioCutterTool } from './audioTools/AudioCutterTool';
 import { AudioMergerTool } from './audioTools/AudioMergerTool';
 import { AudioMetadataEditorTool } from './audioTools/AudioMetadataEditorTool';
+import { AudioNoiseRemoverTool } from './audioTools/AudioNoiseRemoverTool';
+import { AudioVocalRemoverTool } from './audioTools/AudioVocalRemoverTool';
+import { AudioSpeedChangerTool } from './audioTools/AudioSpeedChangerTool';
+import { AudioVolumeBoosterTool } from './audioTools/AudioVolumeBoosterTool';
+import { AudioExtractorTool } from './audioTools/AudioExtractorTool';
 
 // Utility Tools
 import { BarcodeGeneratorTool } from './utilityTools/BarcodeGeneratorTool';
@@ -483,14 +488,18 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'video-filters' || tool.id === 'video-effects') return <VideoFiltersTool />;
   if (tool.id === 'video-compress-resize' || tool.id === 'compress-resize') return <VideoCompressResizeTool />;
 
-  // 4. Specialized Real Audio Processing Engines (All 7 Audio Tools)
+  // 4. Specialized Real Audio Processing Engines (Full Audio Suite matching ilovetools.io)
   if (tool.id === 'audio-converter') return <AudioConverterTool mode="general" />;
   if (tool.id === 'audio-to-mp3') return <AudioConverterTool mode="to-mp3" initialFormat="mp3" />;
-  if (tool.id === 'video-to-audio') return <AudioConverterTool mode="video-to-audio" initialFormat="mp3" />;
+  if (tool.id === 'video-to-audio' || tool.id === 'extract-audio') return <AudioExtractorTool />;
   if (tool.id === 'audio-compressor') return <AudioCompressorTool />;
   if (tool.id === 'audio-cutter') return <AudioCutterTool />;
-  if (tool.id === 'audio-merger') return <AudioMergerTool />;
+  if (tool.id === 'audio-merger' || tool.id === 'audio-joiner') return <AudioMergerTool />;
   if (tool.id === 'audio-metadata-editor') return <AudioMetadataEditorTool />;
+  if (tool.id === 'noise-remover' || tool.id === 'audio-noise-remover') return <AudioNoiseRemoverTool />;
+  if (tool.id === 'remove-vocals' || tool.id === 'vocal-remover') return <AudioVocalRemoverTool />;
+  if (tool.id === 'speed-changer' || tool.id === 'audio-speed-changer') return <AudioSpeedChangerTool />;
+  if (tool.id === 'volume-booster' || tool.id === 'audio-volume-booster') return <AudioVolumeBoosterTool />;
 
   // 5. Specialized Utility Tools
   if (tool.id === 'barcode-generator') return <BarcodeGeneratorTool />;

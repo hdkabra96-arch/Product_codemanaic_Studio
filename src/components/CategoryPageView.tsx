@@ -77,6 +77,14 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
     { id: 'effects', label: 'Effects & Audio' },
   ];
 
+  const AUDIO_SUB_CATEGORIES = [
+    { id: 'all', label: 'All' },
+    { id: 'convert', label: 'Convert & Extract' },
+    { id: 'edit', label: 'Edit & Trim' },
+    { id: 'enhance', label: 'Enhance & Clean' },
+    { id: 'effects', label: 'Speed & Volume' },
+  ];
+
   const activeSubCategories =
     category === 'pdf'
       ? PDF_SUB_CATEGORIES
@@ -84,6 +92,8 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
       ? IMAGE_SUB_CATEGORIES
       : category === 'video'
       ? VIDEO_SUB_CATEGORIES
+      : category === 'audio'
+      ? AUDIO_SUB_CATEGORIES
       : null;
 
   return (

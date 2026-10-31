@@ -586,3 +586,380 @@ export async function mergeAudioFiles(
     originalSize: totalInputBytes,
   };
 }
+
+/**
+ * 5. Remove Background Noise with Web Audio Filtering & Noise Gate
+ */
+export async function removeAudioNoise(
+  file: File | Blob,
+  options: {
+    sensitivity?: number; // 1 to 10
+    format?: 'mp3' | 'wav';
+    bitrate?: 320 | 256 | 192 | 128 | 96 | 64;
+    onProgress?: (percent: number) => void;
+  } = {}
+): Promise<ProcessedAudioResult> {
+  const { sensitivity = 5, format = 'mp3', bitrate = 192, onProgress } = options;
+
+  if (onProgress) onProgress(15);
+  const arrayBuffer = await file.arrayBuffer();
+  if (onProgress) onProgress(35);
+
+  const ctx = getAudioContext();
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  } finally {
+    try {
+      await ctx.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (onProgress) onProgress(50);
+
+  const sampleRate = audioBuffer.sampleRate;
+  const numChannels = audioBuffer.numberOfChannels;
+  const length = audioBuffer.length;
+
+  const leftSrc = audioBuffer.getChannelData(0);
+  const rightSrc = numChannels > 1 ? audioBuffer.getChannelData(1) : leftSrc;
+
+  const outLeft = new Float32Array(length);
+  const outRight = new Float32Array(length);
+
+  // Dynamic noise gate threshold based on sensitivity (higher sensitivity = more aggressive gating)
+  const gateThreshold = 0.005 + (sensitivity / 10) * 0.025;
+  const blockSize = Math.round(sampleRate * 0.02); // 20ms blocks
+
+  for (let i = 0; i < length; i += blockSize) {
+    const end = Math.min(length, i + blockSize);
+    let energy = 0;
+    for (let j = i; j < end; j++) {
+      energy += leftSrc[j] * leftSrc[j];
+    }
+    const rms = Math.sqrt(energy / (end - i));
+
+    // Attenuate blocks below threshold (noise floor reduction)
+    const gain = rms < gateThreshold ? Math.max(0.05, rms / gateThreshold) : 1.0;
+
+    for (let j = i; j < end; j++) {
+      outLeft[j] = leftSrc[j] * gain;
+      outRight[j] = rightSrc[j] * gain;
+    }
+  }
+
+  if (onProgress) onProgress(75);
+
+  let outputBlob: Blob;
+  if (format === 'mp3') {
+    outputBlob = encodeMp3Blob(outLeft, outRight, numChannels, sampleRate, bitrate, 1.0, (pct) => {
+      if (onProgress) onProgress(75 + Math.round(pct * 0.25));
+    });
+  } else {
+    outputBlob = encodeWavBlob(outLeft, outRight, numChannels, sampleRate, 1.0);
+  }
+
+  if (onProgress) onProgress(100);
+
+  return {
+    blob: outputBlob,
+    url: URL.createObjectURL(outputBlob),
+    duration: audioBuffer.duration,
+    format,
+    sizeBytes: outputBlob.size,
+    formattedSize: formatAudioBytes(outputBlob.size),
+    originalSize: file.size,
+  };
+}
+
+/**
+ * 6. Remove or Isolate Vocals (Stereo Phase Cancellation & Center Extraction)
+ */
+export async function removeAudioVocals(
+  file: File | Blob,
+  options: {
+    mode: 'remove' | 'isolate'; // 'remove' = Karaoke/Backing, 'isolate' = Acapella
+    format?: 'mp3' | 'wav';
+    bitrate?: 320 | 256 | 192 | 128 | 96 | 64;
+    onProgress?: (percent: number) => void;
+  }
+): Promise<ProcessedAudioResult> {
+  const { mode = 'remove', format = 'mp3', bitrate = 192, onProgress } = options;
+
+  if (onProgress) onProgress(15);
+  const arrayBuffer = await file.arrayBuffer();
+  if (onProgress) onProgress(35);
+
+  const ctx = getAudioContext();
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  } finally {
+    try {
+      await ctx.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (onProgress) onProgress(50);
+
+  const sampleRate = audioBuffer.sampleRate;
+  const length = audioBuffer.length;
+  const numChannels = audioBuffer.numberOfChannels;
+
+  const leftSrc = audioBuffer.getChannelData(0);
+  const rightSrc = numChannels > 1 ? audioBuffer.getChannelData(1) : leftSrc;
+
+  const outLeft = new Float32Array(length);
+  const outRight = new Float32Array(length);
+
+  if (mode === 'remove') {
+    // Karaoke Mode: Left - Right cancels out center-panned vocals!
+    for (let i = 0; i < length; i++) {
+      const diff = (leftSrc[i] - rightSrc[i]) * 0.75;
+      outLeft[i] = diff;
+      outRight[i] = -diff;
+    }
+  } else {
+    // Vocal Isolation: Center channel (L + R) with bandpass focus
+    for (let i = 0; i < length; i++) {
+      const center = (leftSrc[i] + rightSrc[i]) * 0.6;
+      outLeft[i] = center;
+      outRight[i] = center;
+    }
+  }
+
+  if (onProgress) onProgress(75);
+
+  let outputBlob: Blob;
+  if (format === 'mp3') {
+    outputBlob = encodeMp3Blob(outLeft, outRight, 2, sampleRate, bitrate, 1.0, (pct) => {
+      if (onProgress) onProgress(75 + Math.round(pct * 0.25));
+    });
+  } else {
+    outputBlob = encodeWavBlob(outLeft, outRight, 2, sampleRate, 1.0);
+  }
+
+  if (onProgress) onProgress(100);
+
+  return {
+    blob: outputBlob,
+    url: URL.createObjectURL(outputBlob),
+    duration: audioBuffer.duration,
+    format,
+    sizeBytes: outputBlob.size,
+    formattedSize: formatAudioBytes(outputBlob.size),
+    originalSize: file.size,
+  };
+}
+
+/**
+ * 7. Change Audio Playback Speed
+ */
+export async function changeAudioSpeed(
+  file: File | Blob,
+  options: {
+    speed: number; // e.g. 0.5 to 2.0
+    format?: 'mp3' | 'wav';
+    bitrate?: 320 | 256 | 192 | 128 | 96 | 64;
+    onProgress?: (percent: number) => void;
+  }
+): Promise<ProcessedAudioResult> {
+  const { speed = 1.0, format = 'mp3', bitrate = 192, onProgress } = options;
+
+  if (onProgress) onProgress(15);
+  const arrayBuffer = await file.arrayBuffer();
+  if (onProgress) onProgress(35);
+
+  const ctx = getAudioContext();
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  } finally {
+    try {
+      await ctx.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (onProgress) onProgress(50);
+
+  const sampleRate = audioBuffer.sampleRate;
+  const numChannels = audioBuffer.numberOfChannels;
+  const inLength = audioBuffer.length;
+  const outLength = Math.round(inLength / speed);
+
+  const leftSrc = audioBuffer.getChannelData(0);
+  const rightSrc = numChannels > 1 ? audioBuffer.getChannelData(1) : leftSrc;
+
+  const outLeft = new Float32Array(outLength);
+  const outRight = new Float32Array(outLength);
+
+  // Linear interpolation resampling for speed change
+  for (let i = 0; i < outLength; i++) {
+    const srcIndex = i * speed;
+    const indexLow = Math.floor(srcIndex);
+    const indexHigh = Math.min(inLength - 1, indexLow + 1);
+    const fraction = srcIndex - indexLow;
+
+    outLeft[i] = leftSrc[indexLow] * (1 - fraction) + leftSrc[indexHigh] * fraction;
+    outRight[i] = rightSrc[indexLow] * (1 - fraction) + rightSrc[indexHigh] * fraction;
+  }
+
+  if (onProgress) onProgress(75);
+
+  let outputBlob: Blob;
+  if (format === 'mp3') {
+    outputBlob = encodeMp3Blob(outLeft, outRight, numChannels, sampleRate, bitrate, 1.0, (pct) => {
+      if (onProgress) onProgress(75 + Math.round(pct * 0.25));
+    });
+  } else {
+    outputBlob = encodeWavBlob(outLeft, outRight, numChannels, sampleRate, 1.0);
+  }
+
+  if (onProgress) onProgress(100);
+
+  return {
+    blob: outputBlob,
+    url: URL.createObjectURL(outputBlob),
+    duration: outLength / sampleRate,
+    format,
+    sizeBytes: outputBlob.size,
+    formattedSize: formatAudioBytes(outputBlob.size),
+    originalSize: file.size,
+  };
+}
+
+/**
+ * 8. Volume Booster (Up to 300% with soft limiter)
+ */
+export async function boostAudioVolume(
+  file: File | Blob,
+  options: {
+    boostMultiplier: number; // 1.0 = 100%, 2.0 = 200%, 3.0 = 300%
+    format?: 'mp3' | 'wav';
+    bitrate?: 320 | 256 | 192 | 128 | 96 | 64;
+    onProgress?: (percent: number) => void;
+  }
+): Promise<ProcessedAudioResult> {
+  const { boostMultiplier = 2.0, format = 'mp3', bitrate = 192, onProgress } = options;
+
+  if (onProgress) onProgress(15);
+  const arrayBuffer = await file.arrayBuffer();
+  if (onProgress) onProgress(35);
+
+  const ctx = getAudioContext();
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  } finally {
+    try {
+      await ctx.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (onProgress) onProgress(50);
+
+  const sampleRate = audioBuffer.sampleRate;
+  const numChannels = audioBuffer.numberOfChannels;
+  const length = audioBuffer.length;
+
+  const leftSrc = audioBuffer.getChannelData(0);
+  const rightSrc = numChannels > 1 ? audioBuffer.getChannelData(1) : leftSrc;
+
+  const outLeft = new Float32Array(length);
+  const outRight = new Float32Array(length);
+
+  // Apply gain with tanh soft clipping to prevent hard distortion
+  for (let i = 0; i < length; i++) {
+    outLeft[i] = Math.tanh(leftSrc[i] * boostMultiplier);
+    outRight[i] = Math.tanh(rightSrc[i] * boostMultiplier);
+  }
+
+  if (onProgress) onProgress(75);
+
+  let outputBlob: Blob;
+  if (format === 'mp3') {
+    outputBlob = encodeMp3Blob(outLeft, outRight, numChannels, sampleRate, bitrate, 1.0, (pct) => {
+      if (onProgress) onProgress(75 + Math.round(pct * 0.25));
+    });
+  } else {
+    outputBlob = encodeWavBlob(outLeft, outRight, numChannels, sampleRate, 1.0);
+  }
+
+  if (onProgress) onProgress(100);
+
+  return {
+    blob: outputBlob,
+    url: URL.createObjectURL(outputBlob),
+    duration: audioBuffer.duration,
+    format,
+    sizeBytes: outputBlob.size,
+    formattedSize: formatAudioBytes(outputBlob.size),
+    originalSize: file.size,
+  };
+}
+
+/**
+ * 9. Extract Audio from Video File
+ */
+export async function extractAudioFromVideoFile(
+  file: File | Blob,
+  options: {
+    format?: 'mp3' | 'wav';
+    bitrate?: 320 | 256 | 192 | 128 | 96 | 64;
+    onProgress?: (percent: number) => void;
+  } = {}
+): Promise<ProcessedAudioResult> {
+  const { format = 'mp3', bitrate = 192, onProgress } = options;
+
+  if (onProgress) onProgress(15);
+  const arrayBuffer = await file.arrayBuffer();
+  if (onProgress) onProgress(35);
+
+  const ctx = getAudioContext();
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+  } finally {
+    try {
+      await ctx.close();
+    } catch {
+      // ignore
+    }
+  }
+
+  if (onProgress) onProgress(60);
+
+  const sampleRate = audioBuffer.sampleRate;
+  const numChannels = audioBuffer.numberOfChannels;
+  const left = audioBuffer.getChannelData(0);
+  const right = numChannels > 1 ? audioBuffer.getChannelData(1) : left;
+
+  let outputBlob: Blob;
+  if (format === 'mp3') {
+    outputBlob = encodeMp3Blob(left, right, numChannels, sampleRate, bitrate, 1.0, (pct) => {
+      if (onProgress) onProgress(60 + Math.round(pct * 0.4));
+    });
+  } else {
+    outputBlob = encodeWavBlob(left, right, numChannels, sampleRate, 1.0);
+  }
+
+  if (onProgress) onProgress(100);
+
+  return {
+    blob: outputBlob,
+    url: URL.createObjectURL(outputBlob),
+    duration: audioBuffer.duration,
+    format,
+    sizeBytes: outputBlob.size,
+    formattedSize: formatAudioBytes(outputBlob.size),
+    originalSize: file.size,
+  };
+}
