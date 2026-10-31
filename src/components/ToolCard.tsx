@@ -58,6 +58,8 @@ import {
   Sheet,
   MonitorPlay,
   ShieldCheck,
+  Smile,
+  EyeOff,
 } from 'lucide-react';
 import { ToolItem } from '../types';
 
@@ -185,6 +187,10 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelectTool }) => {
         return <MonitorPlay {...props} />;
       case 'Search':
         return <Search {...props} />;
+      case 'Smile':
+        return <Smile {...props} />;
+      case 'EyeOff':
+        return <EyeOff {...props} />;
       default:
         return <Bot {...props} />;
     }

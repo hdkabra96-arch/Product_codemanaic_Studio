@@ -60,6 +60,22 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
     { id: 'intelligence', label: 'PDF Intelligence' },
   ];
 
+  const IMAGE_SUB_CATEGORIES = [
+    { id: 'all', label: 'All' },
+    { id: 'optimize', label: 'Optimize' },
+    { id: 'create', label: 'Create' },
+    { id: 'edit', label: 'Edit' },
+    { id: 'convert', label: 'Convert' },
+    { id: 'security', label: 'Security' },
+  ];
+
+  const activeSubCategories =
+    category === 'pdf'
+      ? PDF_SUB_CATEGORIES
+      : category === 'image'
+      ? IMAGE_SUB_CATEGORIES
+      : null;
+
   return (
     <div className="space-y-16 sm:space-y-20 pb-16">
       {/* Hero Section Container */}
@@ -199,11 +215,11 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
             />
           </div>
 
-          {/* Subcategory Filter Pills for PDF Suite (matching iLovePDF) */}
-          {category === 'pdf' && (
+          {/* Subcategory Filter Pills for PDF & Image Suites (matching iLovePDF & iLoveIMG) */}
+          {activeSubCategories && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-                {PDF_SUB_CATEGORIES.map((sub) => {
+                {activeSubCategories.map((sub) => {
                   const isSelected = selectedSubCategory === sub.id;
                   const count =
                     sub.id === 'all'
@@ -239,9 +255,9 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
               <div className="flex items-center justify-between text-xs text-[#61758A] px-1">
                 <span>
                   Showing <strong className="text-[#102A43]">{filteredTools.length}</strong> of{' '}
-                  <strong className="text-[#102A43]">{categoryTools.length}</strong> PDF tools
+                  <strong className="text-[#102A43]">{categoryTools.length}</strong> {category.toUpperCase()} tools
                   {selectedSubCategory !== 'all' && (
-                    <> in <span className="text-[#D98218] font-bold">{PDF_SUB_CATEGORIES.find((s) => s.id === selectedSubCategory)?.label}</span></>
+                    <> in <span className="text-[#D98218] font-bold">{activeSubCategories.find((s) => s.id === selectedSubCategory)?.label}</span></>
                   )}
                 </span>
                 {(selectedSubCategory !== 'all' || searchQuery.trim() !== '') && (

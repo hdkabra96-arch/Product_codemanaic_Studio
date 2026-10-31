@@ -833,3 +833,314 @@ export async function imagesToPdf(
 
   return await pdfDoc.save();
 }
+
+/**
+ * Rotate & Flip Image
+ */
+export interface RotateImageOptions {
+  angle: 0 | 90 | 180 | 270;
+  flipHorizontal?: boolean;
+  flipVertical?: boolean;
+  format?: 'image/jpeg' | 'image/png' | 'image/webp';
+  quality?: number;
+}
+
+export async function rotateImage(
+  file: File,
+  options: RotateImageOptions
+): Promise<{
+  blob: Blob;
+  fileName: string;
+  width: number;
+  height: number;
+  originalSize: number;
+  newSize: number;
+}> {
+  const img = await loadImage(file);
+  const origW = img.naturalWidth || img.width;
+  const origH = img.naturalHeight || img.height;
+
+  // Swap width and height if rotated by 90 or 270 degrees
+  const isQuarterTurn = options.angle === 90 || options.angle === 270;
+  const targetW = isQuarterTurn ? origH : origW;
+  const targetH = isQuarterTurn ? origW : origH;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not create canvas 2D context');
+
+  // Fill background if JPEG
+  const format = options.format || (file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png');
+  if (format === 'image/jpeg') {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, targetW, targetH);
+  }
+
+  ctx.save();
+  // Move origin to center of canvas
+  ctx.translate(targetW / 2, targetH / 2);
+
+  // Apply rotation
+  ctx.rotate((options.angle * Math.PI) / 180);
+
+  // Apply flip
+  const scaleX = options.flipHorizontal ? -1 : 1;
+  const scaleY = options.flipVertical ? -1 : 1;
+  ctx.scale(scaleX, scaleY);
+
+  // Draw image centered
+  ctx.drawImage(img, -origW / 2, -origH / 2, origW, origH);
+  ctx.restore();
+
+  const blob = await canvasToBlob(canvas, format, options.quality || 0.92);
+  const ext = format === 'image/jpeg' ? '.jpg' : format === 'image/webp' ? '.webp' : '.png';
+  const baseName = file.name.replace(/\.[^/.]+$/, '');
+
+  return {
+    blob,
+    fileName: `${baseName}_rotated${ext}`,
+    width: targetW,
+    height: targetH,
+    originalSize: file.size,
+    newSize: blob.size,
+  };
+}
+
+/**
+ * Generate Meme with Top and Bottom Text
+ */
+export interface MemeOptions {
+  topText: string;
+  bottomText: string;
+  fontSize?: number;
+  textColor?: string;
+  outlineColor?: string;
+  outlineWidth?: number;
+  fontFamily?: string;
+  allCaps?: boolean;
+}
+
+export async function createMemeImage(
+  source: File | Blob | string,
+  options: MemeOptions
+): Promise<{
+  blob: Blob;
+  fileName: string;
+  width: number;
+  height: number;
+}> {
+  const img = await loadImage(source);
+  const width = img.naturalWidth || img.width;
+  const height = img.naturalHeight || img.height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not create canvas context');
+
+  // Draw original image
+  ctx.drawImage(img, 0, 0, width, height);
+
+  // Setup text styling
+  const baseFontSize = options.fontSize || Math.max(24, Math.floor(width / 14));
+  const fontFam = options.fontFamily || 'Impact, "Arial Black", sans-serif';
+  ctx.font = `900 ${baseFontSize}px ${fontFam}`;
+  ctx.fillStyle = options.textColor || '#FFFFFF';
+  ctx.strokeStyle = options.outlineColor || '#000000';
+  ctx.lineWidth = options.outlineWidth || Math.max(3, Math.floor(baseFontSize / 8));
+  ctx.textAlign = 'center';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+
+  const formatText = (t: string) => (options.allCaps !== false ? t.toUpperCase() : t);
+
+  // Draw Top Text
+  if (options.topText.trim()) {
+    const text = formatText(options.topText);
+    const y = baseFontSize + Math.floor(height * 0.03);
+    ctx.strokeText(text, width / 2, y, width - 40);
+    ctx.fillText(text, width / 2, y, width - 40);
+  }
+
+  // Draw Bottom Text
+  if (options.bottomText.trim()) {
+    const text = formatText(options.bottomText);
+    const y = height - Math.floor(height * 0.04);
+    ctx.strokeText(text, width / 2, y, width - 40);
+    ctx.fillText(text, width / 2, y, width - 40);
+  }
+
+  const blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+  const originalName = source instanceof File ? source.name : 'meme.jpg';
+  const baseName = originalName.replace(/\.[^/.]+$/, '');
+
+  return {
+    blob,
+    fileName: `${baseName}_meme.jpg`,
+    width,
+    height,
+  };
+}
+
+/**
+ * Blur Face & Sensitive Regions
+ */
+export interface BlurRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: 'blur' | 'pixelate' | 'blackout';
+  intensity?: number;
+}
+
+export async function blurImageRegions(
+  file: File,
+  regions: BlurRegion[]
+): Promise<{
+  blob: Blob;
+  fileName: string;
+  width: number;
+  height: number;
+}> {
+  const img = await loadImage(file);
+  const width = img.naturalWidth || img.width;
+  const height = img.naturalHeight || img.height;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not create canvas context');
+
+  ctx.drawImage(img, 0, 0, width, height);
+
+  for (const reg of regions) {
+    const rx = Math.max(0, Math.floor(reg.x));
+    const ry = Math.max(0, Math.floor(reg.y));
+    const rw = Math.min(width - rx, Math.floor(reg.width));
+    const rh = Math.min(height - ry, Math.floor(reg.height));
+
+    if (rw <= 0 || rh <= 0) continue;
+
+    if (reg.type === 'blackout') {
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(rx, ry, rw, rh);
+    } else if (reg.type === 'pixelate') {
+      const blockSize = Math.max(6, Math.floor(reg.intensity || Math.min(rw, rh) / 8));
+      // Downscale region then upscale to create mosaic
+      const tempCanvas = document.createElement('canvas');
+      const tempW = Math.max(1, Math.floor(rw / blockSize));
+      const tempH = Math.max(1, Math.floor(rh / blockSize));
+      tempCanvas.width = tempW;
+      tempCanvas.height = tempH;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, rx, ry, rw, rh, 0, 0, tempW, tempH);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tempCanvas, 0, 0, tempW, tempH, rx, ry, rw, rh);
+        ctx.imageSmoothingEnabled = true;
+      }
+    } else {
+      // Gaussian blur simulation via multi-pass box blur on canvas
+      const blurSteps = Math.min(8, Math.max(2, Math.floor((reg.intensity || 15) / 3)));
+      const tempCanvas = document.createElement('canvas');
+      const scaledW = Math.max(2, Math.floor(rw / blurSteps));
+      const scaledH = Math.max(2, Math.floor(rh / blurSteps));
+      tempCanvas.width = scaledW;
+      tempCanvas.height = scaledH;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.drawImage(canvas, rx, ry, rw, rh, 0, 0, scaledW, scaledH);
+        ctx.drawImage(tempCanvas, 0, 0, scaledW, scaledH, rx, ry, rw, rh);
+      }
+    }
+  }
+
+  const blob = await canvasToBlob(canvas, file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.92);
+  const baseName = file.name.replace(/\.[^/.]+$/, '');
+  const ext = file.type === 'image/png' ? '.png' : '.jpg';
+
+  return {
+    blob,
+    fileName: `${baseName}_blurred${ext}`,
+    width,
+    height,
+  };
+}
+
+/**
+ * Upscale Image with Edge-Preserving Clarity
+ */
+export async function upscaleImage(
+  file: File,
+  scaleFactor: 2 | 4
+): Promise<{
+  blob: Blob;
+  fileName: string;
+  width: number;
+  height: number;
+  originalWidth: number;
+  originalHeight: number;
+}> {
+  const img = await loadImage(file);
+  const origW = img.naturalWidth || img.width;
+  const origH = img.naturalHeight || img.height;
+
+  const targetW = origW * scaleFactor;
+  const targetH = origH * scaleFactor;
+
+  // Step 1: High quality multi-step upscale
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not create canvas context');
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, targetW, targetH);
+
+  // Step 2: Apply subtle sharpening filter
+  const imgData = ctx.getImageData(0, 0, targetW, targetH);
+  const data = imgData.data;
+  const copy = new Uint8ClampedArray(data);
+
+  // 3x3 sharpening kernel
+  // [  0, -0.2,   0 ]
+  // [ -0.2, 1.8, -0.2 ]
+  // [  0, -0.2,   0 ]
+  const strength = 0.25;
+  for (let y = 1; y < targetH - 1; y++) {
+    for (let x = 1; x < targetW - 1; x++) {
+      const idx = (y * targetW + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const center = copy[idx + c];
+        const up = copy[((y - 1) * targetW + x) * 4 + c];
+        const down = copy[((y + 1) * targetW + x) * 4 + c];
+        const left = copy[(y * targetW + (x - 1)) * 4 + c];
+        const right = copy[(y * targetW + (x + 1)) * 4 + c];
+
+        const sharpened = center + strength * (4 * center - up - down - left - right);
+        data[idx + c] = Math.min(255, Math.max(0, Math.round(sharpened)));
+      }
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+
+  const blob = await canvasToBlob(canvas, file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.95);
+  const baseName = file.name.replace(/\.[^/.]+$/, '');
+  const ext = file.type === 'image/png' ? '.png' : '.jpg';
+
+  return {
+    blob,
+    fileName: `${baseName}_${scaleFactor}x_upscaled${ext}`,
+    width: targetW,
+    height: targetH,
+    originalWidth: origW,
+    originalHeight: origH,
+  };
+}

@@ -51,6 +51,12 @@ import { ImageToPdfTool } from './imageTools/ImageToPdfTool';
 import { ImageWatermarkTool } from './imageTools/ImageWatermarkTool';
 import { ImageEnhancerTool } from './imageTools/ImageEnhancerTool';
 import { ImageMetadataRemoverTool } from './imageTools/ImageMetadataRemoverTool';
+import { MemeGeneratorTool } from './imageTools/MemeGeneratorTool';
+import { ImageRotateTool } from './imageTools/ImageRotateTool';
+import { BlurFaceTool } from './imageTools/BlurFaceTool';
+import { HtmlToImageTool } from './imageTools/HtmlToImageTool';
+import { ImageUpscaleTool } from './imageTools/ImageUpscaleTool';
+import { ConvertFromJpgTool } from './imageTools/ConvertFromJpgTool';
 
 // Video Tools
 import { VideoEditorTool } from './videoTools/VideoEditorTool';
@@ -431,20 +437,25 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'pdf-conversion') return <PdfQualityConversionTool />;
 
   // 2. Specialized Real Image Processing Engines (All 14 Image Tools)
+  // 2. Specialized Real Image Processing Engines (All iLoveIMG Image Tools)
   if (tool.id === 'image-conversion') return <ImageConversionTool mode="general" />;
-  if (tool.id === 'jpg-to-png') return <ImageConversionTool mode="jpg-to-png" />;
-  if (tool.id === 'png-to-jpg') return <ImageConversionTool mode="png-to-jpg" />;
+  if (tool.id === 'jpg-to-png' || tool.id === 'convert-from-jpg') return <ConvertFromJpgTool />;
+  if (tool.id === 'png-to-jpg' || tool.id === 'convert-to-jpg') return <ImageConversionTool mode="png-to-jpg" />;
   if (tool.id === 'webp-converter') return <ImageConversionTool mode="webp" />;
-  if (tool.id === 'image-compressor') return <ImageCompressorTool />;
-  if (tool.id === 'image-resizer') return <ImageResizerTool />;
-  if (tool.id === 'image-editor') return <ImageEditorTool />;
-  if (tool.id === 'image-cropper') return <ImageCropperTool />;
+  if (tool.id === 'image-compressor' || tool.id === 'compress-image') return <ImageCompressorTool />;
+  if (tool.id === 'image-resizer' || tool.id === 'resize-image') return <ImageResizerTool />;
+  if (tool.id === 'image-editor' || tool.id === 'photo-editor') return <ImageEditorTool />;
+  if (tool.id === 'image-cropper' || tool.id === 'crop-image') return <ImageCropperTool />;
   if (tool.id === 'image-to-text-ocr' || tool.id === 'image-to-text') return <ImageOcrTool />;
-  if (tool.id === 'background-remover') return <ImageBackgroundRemoverTool />;
+  if (tool.id === 'background-remover' || tool.id === 'remove-background') return <ImageBackgroundRemoverTool />;
   if (tool.id === 'image-to-pdf') return <ImageToPdfTool />;
-  if (tool.id === 'image-watermark') return <ImageWatermarkTool />;
-  if (tool.id === 'image-quality-enhancer') return <ImageEnhancerTool />;
+  if (tool.id === 'image-watermark' || tool.id === 'watermark-image') return <ImageWatermarkTool />;
+  if (tool.id === 'image-quality-enhancer' || tool.id === 'upscale-image') return <ImageUpscaleTool />;
   if (tool.id === 'image-metadata-remover') return <ImageMetadataRemoverTool />;
+  if (tool.id === 'meme-generator') return <MemeGeneratorTool />;
+  if (tool.id === 'rotate-image') return <ImageRotateTool />;
+  if (tool.id === 'blur-face') return <BlurFaceTool />;
+  if (tool.id === 'html-to-image') return <HtmlToImageTool />;
 
   // 3. Specialized Real Video Processing Engines (All 12 Video Tools)
   if (tool.id === 'video-editor') return <VideoEditorTool />;
