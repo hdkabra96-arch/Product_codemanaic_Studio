@@ -34,12 +34,6 @@ export const CtaBanner: React.FC<CtaBannerProps> = ({ category, onCtaClick }) =>
             Make Your <span className="text-[#F4A62A]">Audio Work Easier!</span>
           </>
         );
-      case 'utility':
-        return (
-          <>
-            Make Your <span className="text-[#F4A62A]">Work More Productive!</span>
-          </>
-        );
       default:
         return (
           <>
@@ -63,8 +57,6 @@ export const CtaBanner: React.FC<CtaBannerProps> = ({ category, onCtaClick }) =>
         return 'Explore All Video Tools →';
       case 'audio':
         return 'Explore All Audio Tools →';
-      case 'utility':
-        return 'Explore All Utility Tools →';
       default:
         return 'Explore All Tools →';
     }

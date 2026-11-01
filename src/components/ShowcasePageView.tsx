@@ -99,22 +99,6 @@ export const ShowcasePageView: React.FC<ShowcasePageViewProps> = ({
         'audio-cutter',
       ],
     },
-    {
-      category: 'utility',
-      title: 'Utility Tools',
-      subtitle: 'Everyday tools to make your digital work easier.',
-      buttonLabel: 'View All Utility Tools →',
-      icon: <Wrench className="w-5 h-5 text-amber-500" />,
-      toolIds: [
-        'qr-code-generator',
-        'password-generator',
-        'word-counter',
-        'json-formatter',
-        'url-encoder-decoder',
-        'color-picker',
-        'timestamp-converter',
-      ],
-    },
   ];
 
   return (

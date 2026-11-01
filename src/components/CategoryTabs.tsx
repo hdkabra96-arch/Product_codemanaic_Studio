@@ -45,11 +45,6 @@ export const CategoryTabs: React.FC<CategoryTabsProps> = ({
       label: 'Audio Tools',
       icon: <Music className="w-4 h-4" />,
     },
-    {
-      id: 'utility',
-      label: 'Utility Tools',
-      icon: <Wrench className="w-4 h-4" />,
-    },
   ];
 
   return (

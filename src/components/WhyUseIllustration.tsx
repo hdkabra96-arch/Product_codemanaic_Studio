@@ -182,7 +182,7 @@ export const WhyUseIllustration: React.FC<WhyUseIllustrationProps> = ({ category
     );
   }
 
-  // Default / PDF / Utility illustration: 3D PDF document or desk cards
+  // Default / PDF illustration: 3D PDF document or desk cards
   return (
     <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-lg border border-[#E9DCC8] bg-gradient-to-br from-[#FFFDF8] via-[#FAF5EC] to-[#FFF3DF] p-6 flex flex-col items-center justify-center select-none">
       {/* 3D Document Podium */}

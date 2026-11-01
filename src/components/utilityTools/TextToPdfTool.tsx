@@ -14,7 +14,7 @@ export const TextToPdfTool: React.FC = () => {
   const [docTitle, setDocTitle] = useState<string>('My Document');
   const [docAuthor, setDocAuthor] = useState<string>('Codemaniac Studio');
   const [bodyText, setBodyText] = useState<string>(
-    `Welcome to Codemaniac Studio Document Generator!\n\nThis document was generated directly inside your web browser with 100% client-side privacy. No files or text were sent to any external server.\n\nKey Highlights of Codemaniac Studio:\n1. Fast and responsive client-side engines\n2. 20 PDF Tools, 14 Image Tools, 12 Video Tools, 7 Audio Tools, and 14 Utility Tools\n3. ISO 32000-1 PDF Compliant generation\n4. Zero server data retention\n\nYou can customize the document title, author, font family, font size, margins, and line spacing directly from this studio.`
+    `Welcome to Codemaniac Studio Document Generator!\n\nThis document was generated directly inside your web browser with 100% client-side privacy. No files or text were sent to any external server.\n\nKey Highlights of Codemaniac Studio:\n1. Fast and responsive client-side engines\n2. Comprehensive PDF Tools, Image Tools, Video Tools, and Audio Tools\n3. ISO 32000-1 PDF Compliant generation\n4. Zero server data retention\n\nYou can customize the document title, author, font family, font size, margins, and line spacing directly from this studio.`
   );
 
   const [fontFamily, setFontFamily] = useState<'Helvetica' | 'TimesRoman' | 'Courier'>('Helvetica');

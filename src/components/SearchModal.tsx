@@ -87,7 +87,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               { id: 'image' as const, label: `Image (${ALL_TOOLS.filter((t) => t.category === 'image').length})` },
               { id: 'video' as const, label: `Video (${ALL_TOOLS.filter((t) => t.category === 'video').length})` },
               { id: 'audio' as const, label: `Audio (${ALL_TOOLS.filter((t) => t.category === 'audio').length})` },
-              { id: 'utility' as const, label: `Utility (${ALL_TOOLS.filter((t) => t.category === 'utility').length})` },
             ]
           ).map((c) => (
             <button

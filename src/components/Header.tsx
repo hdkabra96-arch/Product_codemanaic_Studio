@@ -64,11 +64,6 @@ export const Header: React.FC<HeaderProps> = ({
       label: 'Audio Tools',
       icon: <Music className="w-4 h-4 stroke-[2.2]" />,
     },
-    {
-      id: 'utility',
-      label: 'Utility Tools',
-      icon: <Wrench className="w-4 h-4 stroke-[2.2]" />,
-    },
   ];
 
   // Secondary pages under mobile menu

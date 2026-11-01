@@ -90,12 +90,6 @@ import { AudioSpeedChangerTool } from './audioTools/AudioSpeedChangerTool';
 import { AudioVolumeBoosterTool } from './audioTools/AudioVolumeBoosterTool';
 import { AudioExtractorTool } from './audioTools/AudioExtractorTool';
 
-// Utility Tools
-import { BarcodeGeneratorTool } from './utilityTools/BarcodeGeneratorTool';
-import { TimestampConverterTool } from './utilityTools/TimestampConverterTool';
-import { TextFormatterTool } from './utilityTools/TextFormatterTool';
-import { TextToPdfTool } from './utilityTools/TextToPdfTool';
-
 export async function generateConvertedPdf(
   uploadedFile: File,
   qualityPreset: string
@@ -498,13 +492,7 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'speed-changer' || tool.id === 'audio-speed-changer') return <AudioSpeedChangerTool />;
   if (tool.id === 'volume-booster' || tool.id === 'audio-volume-booster') return <AudioVolumeBoosterTool />;
 
-  // 5. Specialized Utility Tools
-  if (tool.id === 'barcode-generator') return <BarcodeGeneratorTool />;
-  if (tool.id === 'timestamp-converter') return <TimestampConverterTool />;
-  if (tool.id === 'text-formatter') return <TextFormatterTool />;
-  if (tool.id === 'text-to-pdf') return <TextToPdfTool />;
-
-  // 6. Coming Soon Fallback with Priority Access Form
+  // 5. Coming Soon Fallback with Priority Access Form
   if (tool.status === 'coming_soon') {
     return (
       <div className="space-y-6 text-center py-8">
