@@ -60,12 +60,19 @@ export default function App() {
 
       if (rawHash.startsWith('products/')) {
         const cat = rawHash.replace('products/', '') as ToolCategory;
-        if (['pdf', 'image', 'video', 'audio'].includes(cat)) {
+        if (['pdf', 'image', 'video', 'audio', 'document'].includes(cat)) {
           setCurrentPage('category');
           setActiveCategory(cat);
           document.title = `${cat.toUpperCase()} Tools - Codemaniac Studio`;
           return;
         }
+      }
+
+      if (['pdf', 'image', 'video', 'audio', 'document'].includes(rawHash)) {
+        setCurrentPage('category');
+        setActiveCategory(rawHash as ToolCategory);
+        document.title = `${rawHash.toUpperCase()} Tools - Codemaniac Studio`;
+        return;
       }
 
       if (rawHash === 'product' || rawHash === 'products') {

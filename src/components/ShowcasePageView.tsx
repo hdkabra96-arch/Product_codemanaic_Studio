@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   PlaySquare,
   Music,
+  Files,
   Wrench,
   Sparkles,
 } from 'lucide-react';
@@ -97,6 +98,21 @@ export const ShowcasePageView: React.FC<ShowcasePageViewProps> = ({
         'audio-converter',
         'audio-compressor',
         'audio-cutter',
+      ],
+    },
+    {
+      category: 'document',
+      title: 'Document Tools',
+      subtitle: 'Convert, view and manage your documents easily.',
+      buttonLabel: 'View All Document Tools →',
+      icon: <Files className="w-5 h-5 text-amber-600" />,
+      toolIds: [
+        'docx-to-pdf',
+        'xlsx-to-pdf',
+        'pptx-to-pdf',
+        'text-to-pdf',
+        'pdf-to-docx',
+        'document-viewer',
       ],
     },
   ];

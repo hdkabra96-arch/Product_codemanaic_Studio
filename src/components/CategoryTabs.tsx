@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   PlaySquare,
   Music,
+  Files,
   Wrench,
   Sparkles,
 } from 'lucide-react';
@@ -44,6 +45,11 @@ export const CategoryTabs: React.FC<CategoryTabsProps> = ({
       id: 'audio',
       label: 'Audio Tools',
       icon: <Music className="w-4 h-4" />,
+    },
+    {
+      id: 'document',
+      label: 'Document Tools',
+      icon: <Files className="w-4 h-4" />,
     },
   ];
 

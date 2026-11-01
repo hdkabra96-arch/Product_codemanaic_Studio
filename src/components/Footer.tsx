@@ -238,6 +238,17 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenLetsTalk }) =>
               <li>
                 <button
                   onClick={() => {
+                    onNavigate('category', 'document');
+                    scrollToTop();
+                  }}
+                  className="hover:text-[#D98218] transition-colors cursor-pointer"
+                >
+                  Document Tools
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => {
                     onNavigate('product', 'all');
                     scrollToTop();
                   }}

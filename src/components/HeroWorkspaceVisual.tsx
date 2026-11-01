@@ -51,6 +51,13 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
           { text: 'AAC', bg: 'bg-[#EA580C]', textCol: 'text-white', top: '12%', right: '14%', delay: '1.0s' },
           { text: 'FLAC', bg: 'bg-[#7C3AED]', textCol: 'text-white', bottom: '28%', right: '6%', delay: '1.5s' },
         ];
+      case 'document':
+        return [
+          { text: 'DOCX', bg: 'bg-[#2563EB]', textCol: 'text-white', top: '10%', left: '8%', delay: '0s' },
+          { text: 'XLSX', bg: 'bg-[#059669]', textCol: 'text-white', top: '2%', left: '44%', delay: '0.5s' },
+          { text: 'PPTX', bg: 'bg-[#EA580C]', textCol: 'text-white', top: '12%', right: '14%', delay: '1.0s' },
+          { text: 'PDF', bg: 'bg-[#EF4444]', textCol: 'text-white', bottom: '28%', right: '6%', delay: '1.5s' },
+        ];
       default: // all / showcase
         return [
           { text: 'PDF', bg: 'bg-[#EF4444]', textCol: 'text-white', top: '12%', left: '8%', delay: '0s' },
@@ -113,6 +120,13 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
                 Edit <br />
                 <span className="text-[#D98218]">Convert</span> <br />
                 Compress Audio !
+              </>
+            )}
+            {category === 'document' && (
+              <>
+                Convert <br />
+                <span className="text-[#D98218]">Manage</span> <br />
+                Any Document !
               </>
             )}
             {category === 'all' && (
@@ -212,6 +226,8 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
                       ? 'Video Suite'
                       : category === 'audio'
                       ? 'Audio Lab'
+                      : category === 'document'
+                      ? 'Document Suite'
                       : 'All-in-One Studio'}
                   </span>
                 </div>

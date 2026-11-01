@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   PlaySquare,
   Music,
+  Files,
   Wrench,
   Sparkles,
 } from 'lucide-react';
@@ -63,6 +64,11 @@ export const Header: React.FC<HeaderProps> = ({
       id: 'audio',
       label: 'Audio Tools',
       icon: <Music className="w-4 h-4 stroke-[2.2]" />,
+    },
+    {
+      id: 'document',
+      label: 'Document Tools',
+      icon: <Files className="w-4 h-4 stroke-[2.2]" />,
     },
   ];
 

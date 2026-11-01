@@ -90,6 +90,19 @@ import { AudioSpeedChangerTool } from './audioTools/AudioSpeedChangerTool';
 import { AudioVolumeBoosterTool } from './audioTools/AudioVolumeBoosterTool';
 import { AudioExtractorTool } from './audioTools/AudioExtractorTool';
 
+// Document Tools
+import { DocxToPdfTool } from './documentTools/DocxToPdfTool';
+import { XlsxToPdfTool } from './documentTools/XlsxToPdfTool';
+import { PptxToPdfTool } from './documentTools/PptxToPdfTool';
+import { TextToPdfTool } from './documentTools/TextToPdfTool';
+import { PdfToDocxTool } from './documentTools/PdfToDocxTool';
+import { PdfToXlsxTool } from './documentTools/PdfToXlsxTool';
+import { PdfToPptxTool } from './documentTools/PdfToPptxTool';
+import { DocumentMetadataViewerTool } from './documentTools/DocumentMetadataViewerTool';
+import { DocumentMetadataEditorTool } from './documentTools/DocumentMetadataEditorTool';
+import { DocumentCompressorTool } from './documentTools/DocumentCompressorTool';
+import { DocumentViewerTool } from './documentTools/DocumentViewerTool';
+
 export async function generateConvertedPdf(
   uploadedFile: File,
   qualityPreset: string
@@ -492,7 +505,20 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'speed-changer' || tool.id === 'audio-speed-changer') return <AudioSpeedChangerTool />;
   if (tool.id === 'volume-booster' || tool.id === 'audio-volume-booster') return <AudioVolumeBoosterTool />;
 
-  // 5. Coming Soon Fallback with Priority Access Form
+  // 5. Specialized Real Document Processing Engines (Full Document Suite matching ilovetools.io/document)
+  if (tool.id === 'docx-to-pdf') return <DocxToPdfTool />;
+  if (tool.id === 'xlsx-to-pdf') return <XlsxToPdfTool />;
+  if (tool.id === 'pptx-to-pdf') return <PptxToPdfTool />;
+  if (tool.id === 'text-to-pdf') return <TextToPdfTool />;
+  if (tool.id === 'pdf-to-docx') return <PdfToDocxTool />;
+  if (tool.id === 'pdf-to-xlsx') return <PdfToXlsxTool />;
+  if (tool.id === 'pdf-to-pptx') return <PdfToPptxTool />;
+  if (tool.id === 'document-metadata-viewer' || tool.id === 'metadata-viewer') return <DocumentMetadataViewerTool />;
+  if (tool.id === 'document-metadata-editor' || tool.id === 'metadata-editor') return <DocumentMetadataEditorTool />;
+  if (tool.id === 'document-compressor') return <DocumentCompressorTool />;
+  if (tool.id === 'document-viewer') return <DocumentViewerTool />;
+
+  // 6. Coming Soon Fallback with Priority Access Form
   if (tool.status === 'coming_soon') {
     return (
       <div className="space-y-6 text-center py-8">
