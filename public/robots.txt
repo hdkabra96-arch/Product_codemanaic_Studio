@@ -1,0 +1,6 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Direct Googlebot & Bingbot to Sitemap
+Sitemap: https://studio.codemaniac.com/sitemap.xml

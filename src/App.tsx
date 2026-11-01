@@ -18,10 +18,13 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLetsTalkOpen, setIsLetsTalkOpen] = useState(false);
 
-  // Sync hash routing on initial load and hashchange
+  // Sync routing on initial load, popstate, and hashchange
   useEffect(() => {
     const handleHash = () => {
-      const rawHash = window.location.hash.replace('#/', '').toLowerCase();
+      const rawHash = (
+        window.location.hash.replace(/^#\/?/, '') ||
+        window.location.pathname.replace(/^\//, '')
+      ).toLowerCase();
 
       // Check if direct tool link (e.g. #/tools/pdf-merge or #/tools/merge-pdf)
       if (rawHash.startsWith('tools/')) {
@@ -98,7 +101,11 @@ export default function App() {
 
     handleHash();
     window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+    window.addEventListener('popstate', handleHash);
+    return () => {
+      window.removeEventListener('hashchange', handleHash);
+      window.removeEventListener('popstate', handleHash);
+    };
   }, []);
 
   // Keyboard shortcut for search (Ctrl+K or /)

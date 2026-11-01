@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ChevronRight,
   ShieldCheck,
@@ -10,11 +10,15 @@ import {
   Sparkles,
   ArrowLeft,
   Share2,
+  HelpCircle,
+  ChevronDown,
+  CheckCircle2,
 } from 'lucide-react';
 import { ToolItem, PageView, ToolCategory } from '../types';
 import { ALL_TOOLS, CATEGORIES_DATA } from '../data/toolsData';
 import { ToolStudioRenderer } from './ToolStudioRenderer';
 import { ToolCard } from './ToolCard';
+import { SEOHead } from './SEOHead';
 
 interface DedicatedToolPageViewProps {
   tool: ToolItem;
@@ -29,8 +33,33 @@ export const DedicatedToolPageView: React.FC<DedicatedToolPageViewProps> = ({
   onSelectTool: _onSelectTool,
   onOpenLetsTalk,
 }) => {
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const categoryInfo = CATEGORIES_DATA[tool.category];
   const categoryName = categoryInfo ? categoryInfo.name : `${tool.category.toUpperCase()} Tools`;
+
+  // Dynamic FAQs for Google FAQPage Schema & on-page search intent
+  const toolFaqs = [
+    {
+      question: `Is ${tool.name} completely safe and private to use?`,
+      answer: `Yes, 100%. All processing for ${tool.name} takes place directly inside your web browser using client-side WebAssembly and HTML5 engines. Your files never leave your device, are never uploaded to any remote server, and are never logged or stored.`,
+    },
+    {
+      question: `Are there any hidden costs, subscriptions, or watermarks?`,
+      answer: `No. ${tool.name} on Codemaniac Studio is 100% free with no registration required, no credit card needed, and absolutely no watermarks added to your output files.`,
+    },
+    {
+      question: `Can I use ${tool.name} on Mac, Windows, iPhone, or Android?`,
+      answer: `Yes! Because ${tool.name} is a modern, responsive web application, it functions seamlessly across Google Chrome, Apple Safari, Mozilla Firefox, Microsoft Edge, and Opera on Mac, Windows, Linux, iOS, and Android.`,
+    },
+    {
+      question: `Is there a limit on how many files I can process?`,
+      answer: `No. There are no daily conversion limits or countdown timers. You can process, convert, or edit as many documents and media files as you need.`,
+    },
+    {
+      question: `Will ${tool.name} reduce the quality of my original files?`,
+      answer: `No, original fidelity and formatting are rigorously preserved. For compression tools, we use advanced lossless and high-efficiency algorithms that preserve visual clarity while eliminating redundant metadata.`,
+    },
+  ];
 
   // Filter 4-5 related tools from the same category
   const relatedTools = ALL_TOOLS.filter(
@@ -49,6 +78,10 @@ export const DedicatedToolPageView: React.FC<DedicatedToolPageViewProps> = ({
     return n;
   };
 
+  const seoTitle = `${tool.name} - Free & Private Online Tool | Codemaniac Studio`;
+  const seoDescription = `${tool.description} Fast, secure, 100% client-side processing without uploading files to any server. No signup, no limits.`;
+  const canonicalUrl = `${window.location.origin}/#/tools/${tool.id}`;
+
   const handleShare = () => {
     if (navigator.share) {
       navigator
@@ -66,6 +99,15 @@ export const DedicatedToolPageView: React.FC<DedicatedToolPageViewProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FBF7EF] text-[#102A43] pb-20">
+      {/* Dynamic SEO Meta & Schema.org JSON-LD */}
+      <SEOHead
+        title={seoTitle}
+        description={seoDescription}
+        canonicalUrl={canonicalUrl}
+        tool={tool}
+        category={tool.category}
+        faqs={toolFaqs}
+      />
       {/* Top Breadcrumb & Quick Action Bar */}
       <div className="border-b border-[#E9DCC8] bg-white/70 backdrop-blur-sm sticky top-20 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-between gap-4">
@@ -226,6 +268,56 @@ export const DedicatedToolPageView: React.FC<DedicatedToolPageViewProps> = ({
               <span>TLS / AES</span>
             </span>
           </div>
+        </div>
+      </section>
+
+      {/* Frequently Asked Questions (FAQ) Section - High SERP Ranking Feature */}
+      <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FFF3DF] text-[#D98218] text-xs font-bold uppercase tracking-wider mb-2 border border-[#F4A62A]/30">
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span>Got Questions?</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-black text-[#102A43]">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-xs sm:text-sm text-[#61758A] mt-2 max-w-xl mx-auto">
+            Everything you need to know about using {tool.name} safely and efficiently on Codemaniac Studio.
+          </p>
+        </div>
+
+        <div className="space-y-3.5">
+          {toolFaqs.map((faq, index) => {
+            const isOpen = openFaqIndex === index;
+            return (
+              <div
+                key={index}
+                className="bg-white rounded-2xl border border-[#E9DCC8] shadow-xs overflow-hidden transition-all"
+              >
+                <button
+                  onClick={() => setOpenFaqIndex(isOpen ? null : index)}
+                  className="w-full px-6 py-4 text-left flex items-center justify-between gap-4 cursor-pointer hover:bg-[#FAF5EC]/40 transition-colors"
+                  aria-expanded={isOpen}
+                >
+                  <span className="font-bold text-sm sm:text-base text-[#102A43]">
+                    {faq.question}
+                  </span>
+                  <div
+                    className={`w-7 h-7 rounded-full bg-[#FAF5EC] flex items-center justify-center shrink-0 text-[#D98218] transition-transform duration-200 ${
+                      isOpen ? 'rotate-180 bg-[#FFF3DF]' : ''
+                    }`}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-6 pb-5 pt-1 text-xs sm:text-sm text-[#61758A] leading-relaxed border-t border-[#E9DCC8]/40 bg-[#FAF5EC]/20">
+                    <p>{faq.answer}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
