@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ToolCategory } from '../types';
-import { Sparkles, Bot } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface HeroWorkspaceVisualProps {
   category: ToolCategory;
@@ -57,13 +57,6 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
           { text: '{JSON}', bg: 'bg-[#059669]', textCol: 'text-white', top: '2%', left: '45%', delay: '0.5s' },
           { text: 'HASH', bg: 'bg-[#7C3AED]', textCol: 'text-white', top: '10%', right: '12%', delay: '1.1s' },
           { text: 'LOCK', bg: 'bg-[#D97706]', textCol: 'text-white', bottom: '26%', right: '4%', delay: '1.6s' },
-        ];
-      case 'ai':
-        return [
-          { text: 'AI Vision', bg: 'bg-[#0284C7]', textCol: 'text-white', top: '8%', left: '8%', delay: '0s' },
-          { text: 'Summarize', bg: 'bg-[#EF4444]', textCol: 'text-white', top: '2%', left: '44%', delay: '0.6s' },
-          { text: 'Generate', bg: 'bg-[#7C3AED]', textCol: 'text-white', top: '10%', right: '10%', delay: '1.2s' },
-          { text: 'Enhance', bg: 'bg-[#059669]', textCol: 'text-white', bottom: '24%', right: '4%', delay: '1.8s' },
         ];
       default: // all / showcase
         return [
@@ -134,13 +127,6 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
                 Small Tools <br />
                 <span className="text-[#D98218]">Big</span> <br />
                 Productivity !
-              </>
-            )}
-            {category === 'ai' && (
-              <>
-                Smarter <br />
-                <span className="text-[#D98218]">Tools</span> <br />
-                Brighter Ideas !
               </>
             )}
             {category === 'all' && (
@@ -242,8 +228,6 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
                       ? 'Audio Lab'
                       : category === 'utility'
                       ? 'Utility Deck'
-                      : category === 'ai'
-                      ? 'AI Engine'
                       : 'All-in-One Studio'}
                   </span>
                 </div>
@@ -254,20 +238,7 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
 
               {/* Dynamic Center Graphic on laptop display */}
               <div className="relative z-10 flex items-center justify-center my-auto">
-                {category === 'ai' ? (
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-[#D98218] to-[#F4A62A] flex items-center justify-center shadow-lg text-white mb-2 animate-bounce">
-                      <Bot className="w-8 h-8 sm:w-10 sm:h-10" />
-                    </div>
-                    <span className="text-[11px] font-bold text-amber-200">
-                      Next-Gen AI Core
-                    </span>
-                    <span className="text-[8px] text-white/70">
-                      Neural File Processing
-                    </span>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2 w-full max-w-[280px]">
+                <div className="grid grid-cols-3 gap-2 w-full max-w-[280px]">
                     {[
                       { l: 'Convert', icon: '⇄', col: 'bg-amber-500/20 text-amber-300' },
                       { l: 'Optimize', icon: '⚡', col: 'bg-emerald-500/20 text-emerald-300' },
@@ -287,7 +258,6 @@ export const HeroWorkspaceVisual: React.FC<HeroWorkspaceVisualProps> = ({ catego
                       </div>
                     ))}
                   </div>
-                )}
               </div>
 
               {/* Bottom status bar on laptop display */}

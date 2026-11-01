@@ -69,11 +69,6 @@ export const Header: React.FC<HeaderProps> = ({
       label: 'Utility Tools',
       icon: <Wrench className="w-4 h-4 stroke-[2.2]" />,
     },
-    {
-      id: 'ai',
-      label: 'AI Tools',
-      icon: <Sparkles className="w-4 h-4 stroke-[2.2]" />,
-    },
   ];
 
   // Secondary pages under mobile menu

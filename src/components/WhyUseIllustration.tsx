@@ -182,49 +182,6 @@ export const WhyUseIllustration: React.FC<WhyUseIllustrationProps> = ({ category
     );
   }
 
-  if (category === 'ai') {
-    return (
-      <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-lg border border-[#E9DCC8] bg-gradient-to-br from-[#FFFDF8] via-[#FAF5EC] to-[#FFF3DF] p-6 flex flex-col items-center justify-center select-none">
-        {/* Friendly AI Robot on Laptop matching screenshot */}
-        <div className="relative flex flex-col items-center">
-          {/* Floating AI icons */}
-          <div className="absolute -top-4 -left-6 px-3 py-1 rounded-full bg-blue-500 text-white text-xs font-bold shadow-md">
-            Text AI
-          </div>
-          <div className="absolute -top-4 -right-6 px-3 py-1 rounded-full bg-purple-500 text-white text-xs font-bold shadow-md">
-            Image AI
-          </div>
-          <div className="absolute -bottom-2 -left-8 px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold shadow-md">
-            Summary
-          </div>
-          <div className="absolute -bottom-2 -right-8 px-3 py-1 rounded-full bg-rose-500 text-white text-xs font-bold shadow-md">
-            Vision
-          </div>
-
-          {/* Cute Robot Mascot */}
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-[#D98218] via-[#F4A62A] to-[#FBBF24] p-1.5 shadow-[0_12px_28px_rgba(217,130,24,0.35)] flex items-center justify-center text-white mb-3">
-            <div className="w-full h-full bg-[#102A43] rounded-2xl flex flex-col items-center justify-center p-2">
-              <Bot className="w-10 h-10 text-[#F4A62A] animate-bounce" />
-              <div className="flex gap-2 mt-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-              </div>
-            </div>
-          </div>
-
-          <div className="text-center">
-            <span className="text-base font-extrabold text-[#102A43]">
-              Codemaniac AI Assistant
-            </span>
-            <p className="text-xs text-[#61758A] mt-0.5">
-              Trained on high-speed file manipulation
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Default / PDF / Utility illustration: 3D PDF document or desk cards
   return (
     <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-lg border border-[#E9DCC8] bg-gradient-to-br from-[#FFFDF8] via-[#FAF5EC] to-[#FFF3DF] p-6 flex flex-col items-center justify-center select-none">

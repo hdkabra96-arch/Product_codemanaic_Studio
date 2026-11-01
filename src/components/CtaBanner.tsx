@@ -8,8 +8,6 @@ interface CtaBannerProps {
 }
 
 export const CtaBanner: React.FC<CtaBannerProps> = ({ category, onCtaClick }) => {
-  const isAi = category === 'ai';
-
   const getHeading = () => {
     switch (category) {
       case 'pdf':
@@ -42,12 +40,6 @@ export const CtaBanner: React.FC<CtaBannerProps> = ({ category, onCtaClick }) =>
             Make Your <span className="text-[#F4A62A]">Work More Productive!</span>
           </>
         );
-      case 'ai':
-        return (
-          <>
-            Powerful <span className="text-[#F4A62A]">AI Tools Are Coming Soon!</span>
-          </>
-        );
       default:
         return (
           <>
@@ -58,9 +50,6 @@ export const CtaBanner: React.FC<CtaBannerProps> = ({ category, onCtaClick }) =>
   };
 
   const getSubtitle = () => {
-    if (isAi) {
-      return "We're working on bringing the next generation of AI tools to make your work even easier.";
-    }
     return 'Explore all our tools and experience fast, secure and high-quality results — anytime, anywhere.';
   };
 
@@ -76,8 +65,6 @@ export const CtaBanner: React.FC<CtaBannerProps> = ({ category, onCtaClick }) =>
         return 'Explore All Audio Tools →';
       case 'utility':
         return 'Explore All Utility Tools →';
-      case 'ai':
-        return 'Notify Me When Available →';
       default:
         return 'Explore All Tools →';
     }

@@ -82,14 +82,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         >
           {(
             [
-              { id: 'all', label: 'All (72)' },
-              { id: 'pdf', label: 'PDF (15)' },
-              { id: 'image', label: 'Image (14)' },
-              { id: 'video', label: 'Video (12)' },
-              { id: 'audio', label: 'Audio (7)' },
-              { id: 'utility', label: 'Utility (14)' },
-              { id: 'ai', label: 'AI (10)' },
-            ] as const
+              { id: 'all' as const, label: `All (${ALL_TOOLS.length})` },
+              { id: 'pdf' as const, label: `PDF (${ALL_TOOLS.filter((t) => t.category === 'pdf').length})` },
+              { id: 'image' as const, label: `Image (${ALL_TOOLS.filter((t) => t.category === 'image').length})` },
+              { id: 'video' as const, label: `Video (${ALL_TOOLS.filter((t) => t.category === 'video').length})` },
+              { id: 'audio' as const, label: `Audio (${ALL_TOOLS.filter((t) => t.category === 'audio').length})` },
+              { id: 'utility' as const, label: `Utility (${ALL_TOOLS.filter((t) => t.category === 'utility').length})` },
+            ]
           ).map((c) => (
             <button
               key={c.id}

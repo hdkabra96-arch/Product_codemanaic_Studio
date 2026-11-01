@@ -60,7 +60,7 @@ export default function App() {
 
       if (rawHash.startsWith('products/')) {
         const cat = rawHash.replace('products/', '') as ToolCategory;
-        if (['pdf', 'image', 'video', 'audio', 'utility', 'ai'].includes(cat)) {
+        if (['pdf', 'image', 'video', 'audio', 'utility'].includes(cat)) {
           setCurrentPage('category');
           setActiveCategory(cat);
           document.title = `${cat.toUpperCase()} Tools - Codemaniac Studio`;

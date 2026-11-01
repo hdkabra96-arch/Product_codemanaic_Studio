@@ -367,12 +367,8 @@ export const CategoryPageView: React.FC<CategoryPageViewProps> = ({
           <CtaBanner
             category={category}
             onCtaClick={() => {
-              if (category === 'ai') {
-                onOpenLetsTalk();
-              } else {
-                onSelectCategory('all');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }
+              onSelectCategory('all');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
           />
         </section>

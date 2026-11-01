@@ -96,9 +96,6 @@ import { TimestampConverterTool } from './utilityTools/TimestampConverterTool';
 import { TextFormatterTool } from './utilityTools/TextFormatterTool';
 import { TextToPdfTool } from './utilityTools/TextToPdfTool';
 
-// AI Tools
-import { AiToolRunner } from './aiTools/AiToolRunner';
-
 export async function generateConvertedPdf(
   uploadedFile: File,
   qualityPreset: string
@@ -507,12 +504,7 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'text-formatter') return <TextFormatterTool />;
   if (tool.id === 'text-to-pdf') return <TextToPdfTool />;
 
-  // 6. Specialized AI Tools
-  if (tool.category === 'ai' || tool.id.startsWith('ai-')) {
-    return <AiToolRunner tool={tool} />;
-  }
-
-  // 7. Coming Soon Fallback with Priority Access Form
+  // 6. Coming Soon Fallback with Priority Access Form
   if (tool.status === 'coming_soon') {
     return (
       <div className="space-y-6 text-center py-8">

@@ -115,21 +115,6 @@ export const ShowcasePageView: React.FC<ShowcasePageViewProps> = ({
         'timestamp-converter',
       ],
     },
-    {
-      category: 'ai',
-      title: 'AI Tools',
-      subtitle: 'Next generation AI tools to boost your productivity.',
-      buttonLabel: 'View All AI Tools →',
-      icon: <Sparkles className="w-5 h-5 text-purple-500" />,
-      toolIds: [
-        'ai-image-editor',
-        'ai-image-enhancer',
-        'ai-background-remover',
-        'ai-pdf-summarizer',
-        'ai-document-analyzer',
-      ],
-      isAi: true,
-    },
   ];
 
   return (
