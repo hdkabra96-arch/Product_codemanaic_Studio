@@ -9,9 +9,11 @@ import {
   RefreshCw,
   Plus,
   Trash2,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { convertImage } from '../../services/image/imageProcessingService';
+import { convertImage, createAnimatedGif } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const ConvertFromJpgTool: React.FC = () => {
   const [mode, setMode] = useState<'single' | 'gif'>('single');
@@ -23,8 +25,19 @@ export const ConvertFromJpgTool: React.FC = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultFileName, setResultFileName] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+  } | null>(null);
 
   // Animation preview for GIF mode
   useEffect(() => {
@@ -57,7 +70,14 @@ export const ConvertFromJpgTool: React.FC = () => {
       setPreviews((prev) => [...prev, ...newPreviews]);
     }
     setResultBlob(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
     setErrorMsg(null);
+  };
+
+  const handleRemoveFile = (idx: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setPreviews((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleConvert = async () => {
@@ -67,37 +87,28 @@ export const ConvertFromJpgTool: React.FC = () => {
 
     try {
       if (mode === 'single') {
-        const res = await convertImage(files[0], {
+        const file = files[0];
+        const res = await convertImage(file, {
           targetFormat,
           quality: 0.95,
         });
         setResultBlob(res.blob);
+        const resUrl = URL.createObjectURL(res.blob);
+        setResultUrl(resUrl);
         setResultFileName(res.fileName);
       } else {
-        // Multi-image sequence to canvas / animated GIF simulation
-        // Draw first frame to canvas
-        const img = new Image();
-        img.src = previews[0];
-        await new Promise((r) => {
-          img.onload = r;
+        // True animated GIF encoding via gifenc
+        const gifRes = await createAnimatedGif(files, {
+          delayMs: gifDelay,
+          maxWidth: 800,
+          maxHeight: 800,
         });
-
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-        }
-
-        // Export as WebP / PNG animation container or bundle
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Failed'))), 'image/png');
-        });
-
-        setResultBlob(blob);
-        setResultFileName(`animated_sequence_${files.length}_frames.png`);
+        setResultBlob(gifRes.blob);
+        const resUrl = URL.createObjectURL(gifRes.blob);
+        setResultUrl(resUrl);
+        setResultFileName('animated_sequence.gif');
       }
+
       setIsProcessing(false);
       try {
         confetti({ particleCount: 40, spread: 60 });
@@ -105,59 +116,81 @@ export const ConvertFromJpgTool: React.FC = () => {
         // ignore
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error converting from JPG.');
+      setErrorMsg(err instanceof Error ? err.message : 'Error converting files.');
       setIsProcessing(false);
     }
   };
 
   const handleDownload = () => {
     if (!resultBlob) return;
-    const url = URL.createObjectURL(resultBlob);
+    const url = resultUrl || URL.createObjectURL(resultBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = resultFileName || 'converted_from_jpg.png';
+    a.download = resultFileName || (mode === 'gif' ? 'animated_sequence.gif' : 'converted_image.png');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!resultUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
-  const handleRemoveFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-    setPreviews((prev) => prev.filter((_, i) => i !== index));
+  const openOriginalPreview = (index: number = 0) => {
+    if (previews.length === 0) return;
+    setModalConfig({
+      title: `${files[index]?.name || 'Image'} (Preview)`,
+      imageSrc: previews[index],
+      fileName: files[index]?.name,
+      fileSizeStr: files[index] ? `${(files[index].size / 1024).toFixed(1)} KB` : undefined,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!resultBlob || !resultUrl) return;
+    setModalConfig({
+      title: `${resultFileName} (Converted Result)`,
+      imageSrc: resultUrl,
+      compareSrc: previews[0] || undefined,
+      fileName: resultFileName,
+      fileSizeStr: `${(resultBlob.size / 1024).toFixed(1)} KB`,
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
     <div className="space-y-6">
-      {/* Mode Selector */}
-      <div className="flex items-center gap-3 p-1.5 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] max-w-md mx-auto">
+      {/* Mode Selector Tabs */}
+      <div className="flex p-1 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] max-w-md mx-auto">
         <button
           type="button"
           onClick={() => {
             setMode('single');
-            setFiles(files.slice(0, 1));
-            setPreviews(previews.slice(0, 1));
+            setFiles((prev) => prev.slice(0, 1));
+            setPreviews((prev) => prev.slice(0, 1));
+            setResultBlob(null);
           }}
-          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
             mode === 'single'
               ? 'bg-white text-[#D98218] shadow-sm'
               : 'text-[#61758A] hover:text-[#102A43]'
           }`}
         >
           <ImageIcon className="w-4 h-4" />
-          <span>Convert to PNG / WEBP</span>
+          <span>Single Image (JPG → PNG/WEBP)</span>
         </button>
         <button
           type="button"
-          onClick={() => setMode('gif')}
-          className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+          onClick={() => {
+            setMode('gif');
+            setResultBlob(null);
+          }}
+          className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
             mode === 'gif'
               ? 'bg-white text-[#D98218] shadow-sm'
               : 'text-[#61758A] hover:text-[#102A43]'
           }`}
         >
           <Film className="w-4 h-4" />
-          <span>Create Animated GIF</span>
+          <span>Multiple JPGs (GIF/Sequence)</span>
         </button>
       </div>
 
@@ -165,7 +198,7 @@ export const ConvertFromJpgTool: React.FC = () => {
         <label className="border-2 border-dashed border-[#E9DCC8] hover:border-[#D98218] bg-[#FAF5EC]/60 hover:bg-[#FFF3DF]/40 rounded-3xl p-10 flex flex-col items-center justify-center text-center cursor-pointer transition-all">
           <input
             type="file"
-            accept=".jpg,.jpeg,image/jpeg"
+            accept="image/jpeg,image/jpg"
             multiple={mode === 'gif'}
             className="hidden"
             onChange={(e) => handleFilesAdded(e.target.files)}
@@ -174,28 +207,26 @@ export const ConvertFromJpgTool: React.FC = () => {
             <Upload className="w-8 h-8" />
           </div>
           <span className="text-lg font-bold text-[#102A43]">
-            {mode === 'single' ? 'Select JPG image to convert' : 'Select multiple JPGs to make animated GIF'}
+            {mode === 'single' ? 'Select a JPG image' : 'Select multiple JPG images for animation'}
           </span>
           <span className="text-xs text-[#61758A] mt-1.5">
-            {mode === 'single'
-              ? 'Turn JPG into PNG with transparent alpha or modern WEBP'
-              : 'Combine several JPG photos into a looping animation'}
+            Convert JPG to transparent PNG, WEBP, or compose multiple frames
           </span>
           <span className="mt-5 px-6 py-2.5 rounded-full bg-[#D98218] text-white hover:bg-[#C66A08] text-sm font-bold shadow-md">
-            {mode === 'single' ? 'Select JPG File' : 'Select Multiple JPG Files'}
+            Select JPG images
           </span>
         </label>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Preview */}
+          {/* Left Column: Preview Viewport */}
           <div className="lg:col-span-7 flex flex-col items-center">
-            <div className="w-full bg-[#FAF5EC] rounded-3xl p-6 border border-[#E9DCC8] shadow-inner flex items-center justify-center min-h-[380px] overflow-hidden relative">
+            <div className="w-full bg-[#FAF5EC] rounded-3xl p-6 border border-[#E9DCC8] shadow-inner flex flex-col items-center justify-center min-h-[380px] overflow-hidden relative group">
               {mode === 'gif' && previews.length > 0 ? (
                 <div className="text-center">
                   <img
                     src={previews[activeFrame]}
                     alt={`Frame ${activeFrame + 1}`}
-                    className="max-h-[360px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain mx-auto"
+                    className="max-h-[320px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain"
                   />
                   <div className="mt-3 inline-block px-3 py-1 rounded-full bg-[#102A43] text-white text-xs font-bold font-mono">
                     Frame {activeFrame + 1} of {previews.length}
@@ -206,10 +237,18 @@ export const ConvertFromJpgTool: React.FC = () => {
                   <img
                     src={previews[0]}
                     alt="Preview"
-                    className="max-h-[360px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain"
+                    className="max-h-[340px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain"
                   />
                 )
               )}
+              <button
+                type="button"
+                onClick={() => openOriginalPreview(mode === 'gif' ? activeFrame : 0)}
+                className="mt-3 px-3 py-1.5 bg-white hover:bg-[#FFF8EE] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Image Full Size</span>
+              </button>
             </div>
 
             {/* Thumbnails in GIF mode */}
@@ -225,7 +264,7 @@ export const ConvertFromJpgTool: React.FC = () => {
                     <img src={p} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
                     <button
                       onClick={() => handleRemoveFile(idx)}
-                      className="absolute top-0 right-0 w-4 h-4 bg-red-600 text-white text-[10px] flex items-center justify-center rounded-bl-md"
+                      className="absolute top-0 right-0 w-4 h-4 bg-red-600 text-white text-[10px] flex items-center justify-center rounded-bl-md cursor-pointer"
                     >
                       ×
                     </button>
@@ -318,23 +357,46 @@ export const ConvertFromJpgTool: React.FC = () => {
             )}
 
             {resultBlob && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col gap-3 shadow-xs">
                 <div>
                   <h4 className="text-xs font-bold text-emerald-900">Conversion Complete!</h4>
                   <p className="text-[11px] text-emerald-700">{(resultBlob.size / 1024).toFixed(1)} KB</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openResultPreview}
+                    className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Preview & Compare Result</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="flex-1 px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer min-w-[120px]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+        />
       )}
     </div>
   );

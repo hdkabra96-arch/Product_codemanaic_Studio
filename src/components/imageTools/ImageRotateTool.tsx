@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Upload,
   Download,
@@ -10,13 +10,18 @@ import {
   AlertCircle,
   RefreshCw,
   Image as ImageIcon,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { rotateImage, RotateImageOptions } from '../../services/image/imageProcessingService';
+import { rotateImage, RotateImageOptions, getImageDimensions } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const ImageRotateTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [origDims, setOrigDims] = useState<{ width: number; height: number } | null>(null);
+
   const [angle, setAngle] = useState<0 | 90 | 180 | 270>(0);
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
@@ -32,7 +37,18 @@ export const ImageRotateTool: React.FC = () => {
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleFileSelect = (selected: File) => {
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+    dimensions?: { width: number; height: number };
+  } | null>(null);
+
+  const handleFileSelect = async (selected: File) => {
     if (!selected.type.startsWith('image/')) {
       setErrorMsg('Please select a valid image file (JPG, PNG, WEBP, GIF).');
       return;
@@ -40,11 +56,21 @@ export const ImageRotateTool: React.FC = () => {
     setFile(selected);
     setErrorMsg(null);
     setResult(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
     setAngle(0);
     setFlipH(false);
     setFlipV(false);
+
     const url = URL.createObjectURL(selected);
     setPreviewUrl(url);
+
+    try {
+      const dims = await getImageDimensions(selected);
+      setOrigDims(dims);
+    } catch {
+      // ignore
+    }
   };
 
   const handleRotateRight = () => {
@@ -70,9 +96,11 @@ export const ImageRotateTool: React.FC = () => {
       });
 
       setResult(res);
+      const resUrl = URL.createObjectURL(res.blob);
+      setResultUrl(resUrl);
       setIsProcessing(false);
       try {
-        confetti({ particleCount: 40, spread: 60 });
+        confetti({ particleCount: 35, spread: 60 });
       } catch {
         // ignore
       }
@@ -84,14 +112,50 @@ export const ImageRotateTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    const url = URL.createObjectURL(result.blob);
+    const url = resultUrl || URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!resultUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+
+  const handleReset = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setFile(null);
+    setPreviewUrl(null);
+    setResultUrl(null);
+    setOrigDims(null);
+    setResult(null);
+    setErrorMsg(null);
+  };
+
+  const openOriginalPreview = () => {
+    if (!file || !previewUrl) return;
+    setModalConfig({
+      title: `${file.name} (Original Image)`,
+      imageSrc: previewUrl,
+      fileName: file.name,
+      fileSizeStr: `${(file.size / 1024).toFixed(1)} KB`,
+      dimensions: origDims || undefined,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!result || !resultUrl) return;
+    setModalConfig({
+      title: `${result.fileName} (Rotated Result)`,
+      imageSrc: resultUrl,
+      compareSrc: previewUrl || undefined,
+      fileName: result.fileName,
+      fileSizeStr: `${(result.newSize / 1024).toFixed(1)} KB`,
+      dimensions: { width: result.width, height: result.height },
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -112,10 +176,10 @@ export const ImageRotateTool: React.FC = () => {
             <RotateCw className="w-8 h-8" />
           </div>
           <span className="text-lg font-bold text-[#102A43]">
-            Select image or drag & drop here
+            Select an image to rotate & flip
           </span>
           <span className="text-xs text-[#61758A] mt-1.5">
-            Rotate JPG, PNG, WEBP or GIF images in seconds
+            Rotate 90°, 180°, 270° or flip horizontally / vertically in real-time
           </span>
           <span className="mt-5 px-6 py-2.5 rounded-full bg-[#D98218] text-white hover:bg-[#C66A08] text-sm font-bold shadow-md">
             Select IMAGE
@@ -123,74 +187,70 @@ export const ImageRotateTool: React.FC = () => {
         </label>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Visual Interactive Canvas Preview */}
+          {/* Left Column: Interactive Rotation Live Viewport */}
           <div className="lg:col-span-7 flex flex-col items-center">
-            <div className="w-full bg-[#FAF5EC] rounded-3xl p-6 border border-[#E9DCC8] shadow-inner flex items-center justify-center min-h-[380px] overflow-hidden relative">
-              {previewUrl && (
-                <div
-                  className="transition-transform duration-300 ease-out"
-                  style={{
-                    transform: `rotate(${angle}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
-                  }}
-                >
+            <div className="w-full bg-[#FAF5EC] rounded-3xl p-6 border border-[#E9DCC8] shadow-inner flex flex-col items-center justify-center min-h-[380px] overflow-hidden">
+              <div
+                className="transition-transform duration-300 ease-out flex items-center justify-center"
+                style={{
+                  transform: `rotate(${angle}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
+                }}
+              >
+                {previewUrl && (
                   <img
                     src={previewUrl}
                     alt="Preview"
-                    className="max-h-[360px] max-w-full rounded-xl shadow-lg border border-[#E9DCC8] object-contain"
+                    className="max-h-[320px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain"
                   />
-                </div>
-              )}
-
-              {/* Angle Pill */}
-              <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-[#102A43]/80 backdrop-blur-sm text-white text-xs font-bold font-mono">
-                {angle}° {flipH ? '· Flip H' : ''} {flipV ? '· Flip V' : ''}
+                )}
               </div>
-            </div>
-
-            <div className="flex items-center justify-between w-full mt-4 text-xs text-[#61758A]">
-              <span>Original File: <strong>{file.name}</strong> ({(file.size / 1024).toFixed(1)} KB)</span>
               <button
-                onClick={() => {
-                  setFile(null);
-                  setPreviewUrl(null);
-                  setResult(null);
-                }}
-                className="text-[#D98218] font-bold hover:underline cursor-pointer"
+                type="button"
+                onClick={openOriginalPreview}
+                className="mt-4 px-3 py-1.5 bg-white hover:bg-[#FFF8EE] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
               >
-                Change Image
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Original Image</span>
               </button>
             </div>
+
+            <button
+              onClick={handleReset}
+              className="mt-3 text-xs text-[#D98218] font-bold hover:underline cursor-pointer"
+            >
+              Choose another image
+            </button>
           </div>
 
-          {/* Right Column: Controls & Rotation Actions */}
+          {/* Right Column: Rotation Controls & Format Options */}
           <div className="lg:col-span-5 space-y-5 bg-white p-6 rounded-3xl border border-[#E9DCC8] shadow-sm">
             <div>
               <label className="block text-xs font-bold text-[#102A43] uppercase tracking-wider mb-2.5">
-                Rotate Controls
+                Rotate Angle
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={handleRotateRight}
-                  className="p-3.5 rounded-2xl bg-[#FFF3DF] hover:bg-[#F4A62A]/20 border border-[#F4A62A]/30 text-[#D98218] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs"
+                  onClick={handleRotateLeft}
+                  className="p-3.5 rounded-2xl border border-[#E9DCC8] hover:bg-[#FAF5EC] font-bold text-xs flex items-center justify-center gap-2 text-[#102A43] cursor-pointer shadow-xs"
                 >
-                  <RotateCw className="w-4 h-4" />
-                  <span>Right (+90°)</span>
+                  <RotateCcw className="w-4 h-4 text-[#D98218]" />
+                  <span>Left 90°</span>
                 </button>
                 <button
                   type="button"
-                  onClick={handleRotateLeft}
-                  className="p-3.5 rounded-2xl bg-[#FFF3DF] hover:bg-[#F4A62A]/20 border border-[#F4A62A]/30 text-[#D98218] font-bold text-xs flex items-center justify-center gap-2 cursor-pointer transition-all shadow-xs"
+                  onClick={handleRotateRight}
+                  className="p-3.5 rounded-2xl border border-[#E9DCC8] hover:bg-[#FAF5EC] font-bold text-xs flex items-center justify-center gap-2 text-[#102A43] cursor-pointer shadow-xs"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Left (-90°)</span>
+                  <RotateCw className="w-4 h-4 text-[#D98218]" />
+                  <span>Right 90°</span>
                 </button>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-bold text-[#102A43] uppercase tracking-wider mb-2.5">
-                Flip Controls
+                Flip Axis
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -275,25 +335,49 @@ export const ImageRotateTool: React.FC = () => {
             )}
 
             {result && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col gap-3 shadow-xs">
                 <div>
                   <h4 className="text-xs font-bold text-emerald-900">Image Rotated!</h4>
                   <p className="text-[11px] text-emerald-700">
                     {result.width} × {result.height} px · {(result.newSize / 1024).toFixed(1)} KB
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openResultPreview}
+                    className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Preview & Compare Result</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="flex-1 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer min-w-[120px]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+          dimensions={modalConfig.dimensions}
+        />
       )}
     </div>
   );

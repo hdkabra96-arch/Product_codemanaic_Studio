@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Download, RefreshCw, Check, AlertCircle, FilePlus2, ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
+import { Upload, Download, RefreshCw, Check, AlertCircle, FilePlus2, ArrowUp, ArrowDown, Trash2, Plus, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { imagesToPdf, ImageToPdfOptions } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
+import { PdfDocumentReviewModal } from '../pdfTools/PdfDocumentReviewModal';
 
 interface ImageItem {
   id: string;
@@ -18,6 +20,17 @@ export const ImageToPdfTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultPdf, setResultPdf] = useState<{ bytes: Uint8Array; fileName: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modals state
+  const [previewImageModal, setPreviewImageModal] = useState<{
+    isOpen: boolean;
+    imageSrc: string;
+    title: string;
+    fileName: string;
+    fileSizeStr: string;
+  } | null>(null);
+
+  const [isPdfReviewOpen, setIsPdfReviewOpen] = useState(false);
 
   const handleAddFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -67,11 +80,7 @@ export const ImageToPdfTool: React.FC = () => {
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => {
-      const target = prev[index];
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((_, i) => i !== index);
-    });
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleGeneratePdf = async () => {
@@ -80,27 +89,22 @@ export const ImageToPdfTool: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const files = images.map((img) => img.file);
-      const pdfBytes = await imagesToPdf(files, {
+      const fileList = images.map((img) => img.file);
+      const bytes = await imagesToPdf(fileList, {
         pageSize,
         orientation,
         margin,
       });
 
-      const baseName = images[0].file.name.replace(/\.[^/.]+$/, '');
-      setResultPdf({
-        bytes: pdfBytes,
-        fileName: `${baseName}_converted.pdf`,
-      });
+      setResultPdf({ bytes, fileName: 'converted_images.pdf' });
       setIsProcessing(false);
-
       try {
         confetti({ particleCount: 45, spread: 60 });
       } catch {
         // ignore
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error converting images to PDF.');
+      setErrorMsg(err instanceof Error ? err.message : 'Error generating PDF.');
       setIsProcessing(false);
     }
   };
@@ -118,6 +122,13 @@ export const ImageToPdfTool: React.FC = () => {
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
+  const handleReset = () => {
+    images.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+    setImages([]);
+    setResultPdf(null);
+    setErrorMsg(null);
+  };
+
   return (
     <div className="space-y-4">
       {images.length === 0 ? (
@@ -133,10 +144,10 @@ export const ImageToPdfTool: React.FC = () => {
             <FilePlus2 className="w-7 h-7" />
           </div>
           <span className="text-base font-bold text-[#102A43]">
-            Select multiple images to convert to PDF
+            Select images to merge into single PDF
           </span>
           <span className="text-xs text-[#61758A] mt-1">
-            Reorder pages, choose orientation, margins & document size
+            JPG, PNG, WEBP, GIF, BMP • Drag & arrange pages in exact order
           </span>
           <span className="mt-4 px-4 py-1.5 rounded-full bg-white border border-[#E9DCC8] text-xs font-bold text-[#102A43] shadow-sm">
             Browse Images
@@ -145,24 +156,39 @@ export const ImageToPdfTool: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {/* Header */}
-          <div className="flex items-center justify-between p-3 bg-white rounded-2xl border border-[#E9DCC8]">
-            <span className="text-xs font-bold text-[#102A43]">
-              {images.length} {images.length === 1 ? 'Page' : 'Pages'} in Document
-            </span>
-            <label className="px-3 py-1.5 rounded-xl bg-white border border-[#E9DCC8] hover:border-[#D98218] text-xs font-bold text-[#102A43] flex items-center gap-1 cursor-pointer transition-colors shadow-sm">
-              <Plus className="w-3.5 h-3.5 text-[#D98218]" />
-              <span>Add More</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(e) => handleAddFiles(e.target.files)}
-              />
-            </label>
+          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex items-center justify-between">
+            <div>
+              <h4 className="text-sm font-bold text-[#102A43]">
+                {images.length} Image{images.length > 1 ? 's' : ''} Ready for PDF
+              </h4>
+              <span className="text-xs text-[#61758A]">
+                Total input size: {(images.reduce((acc, img) => acc + img.file.size, 0) / 1024).toFixed(1)} KB
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="px-3 py-1.5 rounded-xl border border-[#E9DCC8] bg-[#FAF5EC] hover:bg-[#FFF3DF] text-[#D98218] text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-xs">
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add More</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleAddFiles(e.target.files)}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="text-xs font-semibold text-[#61758A] hover:text-red-600 px-2 cursor-pointer"
+              >
+                Clear All
+              </button>
+            </div>
           </div>
 
-          {/* List of Images with Re-order buttons */}
+          {/* List of Images with Re-order and Preview buttons */}
           <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
             {images.map((item, idx) => (
               <div
@@ -173,11 +199,28 @@ export const ImageToPdfTool: React.FC = () => {
                   <span className="w-6 h-6 rounded-md bg-[#FFF3DF] text-[#D98218] text-xs font-bold flex items-center justify-center shrink-0">
                     {idx + 1}
                   </span>
-                  <img
-                    src={item.previewUrl}
-                    alt="thumb"
-                    className="w-9 h-9 object-cover rounded-lg border border-[#E9DCC8] shrink-0"
-                  />
+                  <div
+                    onClick={() =>
+                      setPreviewImageModal({
+                        isOpen: true,
+                        imageSrc: item.previewUrl,
+                        title: `Image #${idx + 1}: ${item.file.name}`,
+                        fileName: item.file.name,
+                        fileSizeStr: `${(item.file.size / 1024).toFixed(1)} KB`,
+                      })
+                    }
+                    className="w-10 h-10 object-cover rounded-lg border border-[#E9DCC8] shrink-0 cursor-pointer overflow-hidden relative group"
+                    title="Click to review image"
+                  >
+                    <img
+                      src={item.previewUrl}
+                      alt="thumb"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                      <Eye className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
                   <div className="min-w-0">
                     <h5 className="text-xs font-bold text-[#102A43] truncate max-w-[160px] sm:max-w-xs">
                       {item.file.name}
@@ -189,6 +232,22 @@ export const ImageToPdfTool: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewImageModal({
+                        isOpen: true,
+                        imageSrc: item.previewUrl,
+                        title: `Image #${idx + 1}: ${item.file.name}`,
+                        fileName: item.file.name,
+                        fileSizeStr: `${(item.file.size / 1024).toFixed(1)} KB`,
+                      })
+                    }
+                    className="p-1 rounded-md border border-[#E9DCC8] text-[#D98218] hover:bg-[#FFF8EE] cursor-pointer"
+                    title="Review Image"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
                   <button
                     onClick={() => moveUp(idx)}
                     disabled={idx === 0}
@@ -218,15 +277,15 @@ export const ImageToPdfTool: React.FC = () => {
           </div>
 
           {/* Page Settings */}
-          <div className="p-4 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="p-4 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] space-y-3">
             <div>
               <label className="text-xs font-bold text-[#102A43] block mb-1">PAGE SIZE</label>
               <select
                 value={pageSize}
                 onChange={(e) => setPageSize(e.target.value as any)}
-                className="w-full p-2 rounded-xl border border-[#E9DCC8] text-xs font-bold bg-white focus:outline-none"
+                className="w-full p-2 bg-white rounded-lg border border-[#E9DCC8] text-xs font-bold text-[#102A43]"
               >
-                <option value="a4">Standard A4 (595 × 842 pt)</option>
+                <option value="a4">A4 (595 × 842 pt)</option>
                 <option value="letter">US Letter (612 × 792 pt)</option>
                 <option value="fit">Fit to Image Size</option>
               </select>
@@ -298,7 +357,7 @@ export const ImageToPdfTool: React.FC = () => {
               )}
             </button>
           ) : (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <Check className="w-4 h-4" />
@@ -310,16 +369,47 @@ export const ImageToPdfTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download PDF</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPdfReviewOpen(true)}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Review Generated PDF</span>
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImageModal && (
+        <ImagePreviewModal
+          isOpen={previewImageModal.isOpen}
+          onClose={() => setPreviewImageModal(null)}
+          title={previewImageModal.title}
+          imageSrc={previewImageModal.imageSrc}
+          fileName={previewImageModal.fileName}
+          fileSizeStr={previewImageModal.fileSizeStr}
+        />
+      )}
+
+      {/* Generated PDF Document Review Modal */}
+      {isPdfReviewOpen && resultPdf && (
+        <PdfDocumentReviewModal
+          pdfData={resultPdf.bytes}
+          title={resultPdf.fileName}
+          onClose={() => setIsPdfReviewOpen(false)}
+        />
       )}
     </div>
   );

@@ -12,10 +12,12 @@ import {
   ZoomIn,
   ZoomOut,
   Edit3,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { renderPdfPageToCanvas, getPdfPageCount, fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
 import { saveEditedPdf, EditorAnnotation } from '../../services/pdf/editorWatermarkService';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfEditorTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -29,6 +31,41 @@ export const PdfEditorTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewData, setReviewData] = useState<{
+    file?: File | null;
+    pdfData?: Uint8Array | null;
+    title: string;
+    initialPage?: number;
+  } | null>(null);
+
+  const openDocumentReview = () => {
+    if (!file) return;
+    setReviewData({
+      file,
+      title: `${file.name} (Review Document)`,
+      initialPage: currentPage,
+    });
+    setIsReviewOpen(true);
+  };
+
+  const openResultReview = () => {
+    if (!resultBlob || !file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setReviewData({
+          pdfData: new Uint8Array(reader.result as ArrayBuffer),
+          title: `${file.name.replace(/\.[^/.]+$/, '')}_edited.pdf (Preview)`,
+          initialPage: currentPage,
+        });
+        setIsReviewOpen(true);
+      }
+    };
+    reader.readAsArrayBuffer(resultBlob);
+  };
 
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const [canvasUrl, setCanvasUrl] = useState<string>('');
@@ -184,6 +221,15 @@ export const PdfEditorTool: React.FC = () => {
 
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                onClick={openDocumentReview}
+                className="px-2.5 py-1 bg-white hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                title="Review entire document in high resolution"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
                 onClick={() => setZoom((z) => Math.max(0.7, z - 0.15))}
                 className="p-1 rounded bg-white border border-[#E9DCC8] cursor-pointer"
                 title="Zoom out"
@@ -338,6 +384,14 @@ export const PdfEditorTool: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={openResultReview}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-emerald-700" />
+                  <span>Review Edited PDF</span>
+                </button>
+                <button
                   onClick={handleDownload}
                   className="px-4 py-2 bg-[#D98218] hover:bg-[#C66A08] text-white text-xs font-bold rounded-full shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
@@ -364,6 +418,17 @@ export const PdfEditorTool: React.FC = () => {
             </button>
           )}
         </div>
+      )}
+
+      {/* Review Modal */}
+      {isReviewOpen && reviewData && (
+        <PdfDocumentReviewModal
+          file={reviewData.file}
+          pdfData={reviewData.pdfData}
+          title={reviewData.title}
+          initialPage={reviewData.initialPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

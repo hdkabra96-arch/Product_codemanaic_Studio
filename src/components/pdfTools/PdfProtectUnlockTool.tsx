@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Download, Check, AlertCircle, RefreshCw, Lock, Unlock } from 'lucide-react';
+import { Upload, Download, Check, AlertCircle, RefreshCw, Lock, Unlock, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { protectPdf, unlockPdf } from '../../services/pdf/securityMetadataService';
 import { fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 interface PdfProtectUnlockToolProps {
   initialMode?: 'protect' | 'unlock';
@@ -18,6 +19,41 @@ export const PdfProtectUnlockTool: React.FC<PdfProtectUnlockToolProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewData, setReviewData] = useState<{
+    file?: File | null;
+    pdfData?: Uint8Array | null;
+    title: string;
+    initialPage?: number;
+  } | null>(null);
+
+  const openDocumentReview = () => {
+    if (!file) return;
+    setReviewData({
+      file,
+      title: `${file.name} (Review Document)`,
+      initialPage: 1,
+    });
+    setIsReviewOpen(true);
+  };
+
+  const openResultReview = () => {
+    if (!resultBlob || !file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setReviewData({
+          pdfData: new Uint8Array(reader.result as ArrayBuffer),
+          title: `${file.name.replace(/\.[^/.]+$/, '')}_${activeTab === 'protect' ? 'protected' : 'unlocked'}.pdf (Preview)`,
+          initialPage: 1,
+        });
+        setIsReviewOpen(true);
+      }
+    };
+    reader.readAsArrayBuffer(resultBlob);
+  };
 
   const handleAction = async () => {
     if (!file) return;
@@ -108,15 +144,28 @@ export const PdfProtectUnlockTool: React.FC<PdfProtectUnlockToolProps> = ({
               <p className="font-bold text-[#102A43] truncate max-w-xs">{file.name}</p>
               <p className="text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setResultBlob(null);
-              }}
-              className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change
-            </button>
+            <div className="flex items-center gap-2">
+              {activeTab === 'protect' && (
+                <button
+                  type="button"
+                  onClick={openDocumentReview}
+                  className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  title="Review document properly"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>Review Document</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResultBlob(null);
+                }}
+                className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
+              >
+                Change
+              </button>
+            </div>
           </div>
 
           {/* Mode Selector Tabs */}
@@ -223,6 +272,16 @@ export const PdfProtectUnlockTool: React.FC<PdfProtectUnlockToolProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {activeTab === 'unlock' && (
+                  <button
+                    type="button"
+                    onClick={openResultReview}
+                    className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Eye className="w-4 h-4 text-emerald-700" />
+                    <span>Review Unlocked PDF</span>
+                  </button>
+                )}
                 <button
                   onClick={handleDownload}
                   className="px-4 py-2 bg-[#D98218] hover:bg-[#C66A08] text-white text-xs font-bold rounded-full shadow-sm flex items-center gap-1.5 cursor-pointer"
@@ -256,6 +315,17 @@ export const PdfProtectUnlockTool: React.FC<PdfProtectUnlockToolProps> = ({
             </button>
           )}
         </div>
+      )}
+
+      {/* Review Modal */}
+      {isReviewOpen && reviewData && (
+        <PdfDocumentReviewModal
+          file={reviewData.file}
+          pdfData={reviewData.pdfData}
+          title={reviewData.title}
+          initialPage={reviewData.initialPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

@@ -12,10 +12,12 @@ import {
   ChevronRight,
   Move,
   Trash2,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { fileToArrayBuffer, renderPdfPageToCanvas, getPdfPageCount } from '../../services/pdf/pdfLibUtils';
 import { signPdfDocument, SignaturePlacement } from '../../services/pdf/signPdfService';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfSignTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -49,6 +51,36 @@ export const PdfSignTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultBytes, setResultBytes] = useState<Uint8Array | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewData, setReviewData] = useState<{
+    file?: File | null;
+    pdfData?: Uint8Array | null;
+    title: string;
+    initialPage?: number;
+  } | null>(null);
+
+  const openDocumentReview = () => {
+    if (!file) return;
+    setReviewData({
+      file,
+      title: `${file.name} (Review Document)`,
+      initialPage: currentPage,
+    });
+    setIsReviewOpen(true);
+  };
+
+  const openResultReview = () => {
+    if (!resultBytes || !file) return;
+    const baseName = file.name.replace(/\.[^/.]+$/, '');
+    setReviewData({
+      pdfData: resultBytes,
+      title: `${baseName}_signed.pdf (Review Result)`,
+      initialPage: currentPage,
+    });
+    setIsReviewOpen(true);
+  };
 
   // Load preview of current page
   const loadPagePreview = async (fileObj: File, pageNum: number) => {
@@ -265,16 +297,27 @@ export const PdfSignTool: React.FC = () => {
                 {(file.size / 1024).toFixed(1)} KB · Total Pages: <strong>{totalPages}</strong>
               </p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setResultBytes(null);
-                setSignatureDataUrl('');
-              }}
-              className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change PDF
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openDocumentReview}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Review document properly"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResultBytes(null);
+                  setSignatureDataUrl('');
+                }}
+                className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
+              >
+                Change PDF
+              </button>
+            </div>
           </div>
 
           {/* Two-Column Studio Layout */}
@@ -608,17 +651,38 @@ export const PdfSignTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Signed PDF</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openResultReview}
+                  className="px-4 py-2.5 rounded-full bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Eye className="w-4 h-4 text-emerald-700" />
+                  <span>Review Signed PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Signed PDF</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Review Modal */}
+      {isReviewOpen && reviewData && (
+        <PdfDocumentReviewModal
+          file={reviewData.file}
+          pdfData={reviewData.pdfData}
+          title={reviewData.title}
+          initialPage={reviewData.initialPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

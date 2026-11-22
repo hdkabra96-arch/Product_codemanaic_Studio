@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Download, Check, AlertCircle, RefreshCw, FileImage, Archive } from 'lucide-react';
+import { Upload, Download, Check, AlertCircle, RefreshCw, FileImage, Archive, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { fileToArrayBuffer, getPdfPageCount } from '../../services/pdf/pdfLibUtils';
 import { convertPdfToImages, PageImageResult } from '../../services/pdf/pdfToJpgService';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfToJpgTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -20,6 +21,16 @@ export const PdfToJpgTool: React.FC = () => {
   const [images, setImages] = useState<PageImageResult[]>([]);
   const [zipBlob, setZipBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewPage, setReviewPage] = useState(1);
+
+  const openDocumentReview = (page: number = 1) => {
+    if (!file) return;
+    setReviewPage(page);
+    setIsReviewOpen(true);
+  };
 
   const handleFileSelected = async (selected: File | null) => {
     if (!selected) return;
@@ -128,16 +139,27 @@ export const PdfToJpgTool: React.FC = () => {
                 {(file.size / 1024).toFixed(1)} KB · Total Pages: <strong>{totalPages}</strong>
               </p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setImages([]);
-                setZipBlob(null);
-              }}
-              className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change PDF
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openDocumentReview(1)}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Review document properly"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setImages([]);
+                  setZipBlob(null);
+                }}
+                className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
+              >
+                Change PDF
+              </button>
+            </div>
           </div>
 
           {/* Options */}
@@ -276,6 +298,15 @@ export const PdfToJpgTool: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+      {/* Review Modal */}
+      {isReviewOpen && file && (
+        <PdfDocumentReviewModal
+          file={file}
+          title={`${file.name} (Review Document)`}
+          initialPage={reviewPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

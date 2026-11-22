@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Upload, Download, RefreshCw, Check, AlertCircle, Stamp, Type, Image as ImageIcon } from 'lucide-react';
+import { Upload, Download, RefreshCw, Check, AlertCircle, Stamp, Type, Image as ImageIcon, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { applyWatermark, WatermarkOptions, getImageDimensions } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const ImageWatermarkTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // Watermark options
   const [wmType, setWmType] = useState<'text' | 'image'>('text');
@@ -23,7 +26,18 @@ export const ImageWatermarkTool: React.FC = () => {
   const [result, setResult] = useState<{ blob: Blob; fileName: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleFileSelect = (selected: File) => {
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+    dimensions?: { width: number; height: number };
+  } | null>(null);
+
+  const handleFileSelect = async (selected: File) => {
     if (!selected.type.startsWith('image/')) {
       setErrorMsg('Please select a valid image file.');
       return;
@@ -31,9 +45,18 @@ export const ImageWatermarkTool: React.FC = () => {
     setFile(selected);
     setErrorMsg(null);
     setResult(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
 
     const url = URL.createObjectURL(selected);
     setPreviewUrl(url);
+
+    try {
+      const dims = await getImageDimensions(selected);
+      setDimensions(dims);
+    } catch {
+      // ignore
+    }
   };
 
   const handleApplyWatermark = async () => {
@@ -63,7 +86,10 @@ export const ImageWatermarkTool: React.FC = () => {
       });
 
       setResult(res);
+      const resUrl = URL.createObjectURL(res.blob);
+      setResultUrl(resUrl);
       setIsProcessing(false);
+
       try {
         confetti({ particleCount: 40, spread: 60 });
       } catch {
@@ -77,22 +103,50 @@ export const ImageWatermarkTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    const url = URL.createObjectURL(result.blob);
+    const url = resultUrl || URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!resultUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
   const handleReset = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
     setFile(null);
     setPreviewUrl(null);
+    setResultUrl(null);
+    setDimensions(null);
     setResult(null);
     setErrorMsg(null);
+  };
+
+  const openOriginalPreview = () => {
+    if (!file || !previewUrl) return;
+    setModalConfig({
+      title: `${file.name} (Original Image)`,
+      imageSrc: previewUrl,
+      fileName: file.name,
+      fileSizeStr: `${(file.size / 1024).toFixed(1)} KB`,
+      dimensions: dimensions || undefined,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!result || !resultUrl) return;
+    setModalConfig({
+      title: `${result.fileName} (Watermarked Result)`,
+      imageSrc: resultUrl,
+      compareSrc: previewUrl || undefined,
+      fileName: result.fileName,
+      fileSizeStr: `${(result.blob.size / 1024).toFixed(1)} KB`,
+      dimensions: dimensions || undefined,
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -113,10 +167,10 @@ export const ImageWatermarkTool: React.FC = () => {
             <Stamp className="w-7 h-7" />
           </div>
           <span className="text-base font-bold text-[#102A43]">
-            Select an image to watermark
+            Select an image to add watermark
           </span>
           <span className="text-xs text-[#61758A] mt-1">
-            Add text, logo branding, copyright protection & custom stamps
+            Stamp customizable text or logo with variable transparency and tiling
           </span>
           <span className="mt-4 px-4 py-1.5 rounded-full bg-white border border-[#E9DCC8] text-xs font-bold text-[#102A43] shadow-sm">
             Browse File
@@ -124,115 +178,107 @@ export const ImageWatermarkTool: React.FC = () => {
         </label>
       ) : (
         <div className="space-y-4">
-          {/* Header */}
-          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex items-center justify-between">
+          {/* Header Card with Preview Option */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-sm font-bold text-[#102A43] truncate max-w-xs">{file.name}</span>
-              <span className="text-xs text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</span>
+              <span className="text-xs text-[#61758A]">
+                {(file.size / 1024).toFixed(1)} KB {dimensions ? ` • ${dimensions.width} × ${dimensions.height} px` : ''}
+              </span>
             </div>
-            <button
-              onClick={handleReset}
-              className="text-xs font-semibold text-[#61758A] hover:text-red-600 cursor-pointer"
-            >
-              Change File
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openOriginalPreview}
+                className="px-3.5 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Image</span>
+              </button>
+              <button
+                onClick={handleReset}
+                className="text-xs font-semibold text-[#61758A] hover:text-red-600 px-2 cursor-pointer"
+              >
+                Change File
+              </button>
+            </div>
           </div>
 
-          {/* Mode Switcher */}
-          <div className="flex gap-2 bg-[#FAF5EC] p-1.5 rounded-xl border border-[#E9DCC8]">
-            <button
-              onClick={() => setWmType('text')}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                wmType === 'text'
-                  ? 'bg-[#D98218] text-white shadow-sm'
-                  : 'text-[#102A43] hover:bg-white/60'
-              }`}
-            >
-              <Type className="w-3.5 h-3.5" />
-              <span>Text Watermark</span>
-            </button>
-            <button
-              onClick={() => setWmType('image')}
-              className={`flex-1 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                wmType === 'image'
-                  ? 'bg-[#D98218] text-white shadow-sm'
-                  : 'text-[#102A43] hover:bg-white/60'
-              }`}
-            >
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span>Logo / Graphic Stamp</span>
-            </button>
-          </div>
+          {/* Watermark Setup Controls */}
+          <div className="p-4 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] space-y-4">
+            {/* Mode selection */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setWmType('text')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-colors cursor-pointer ${
+                  wmType === 'text'
+                    ? 'bg-[#D98218] text-white border-[#D98218]'
+                    : 'bg-white text-[#102A43] border-[#E9DCC8]'
+                }`}
+              >
+                <Type className="w-4 h-4" />
+                <span>Text Watermark</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setWmType('image')}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-colors cursor-pointer ${
+                  wmType === 'image'
+                    ? 'bg-[#D98218] text-white border-[#D98218]'
+                    : 'bg-white text-[#102A43] border-[#E9DCC8]'
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>Image / Logo Stamp</span>
+              </button>
+            </div>
 
-          {/* Configuration Panel */}
-          <div className="p-4 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] space-y-3">
             {wmType === 'text' ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-bold text-[#102A43] block mb-1">
-                    WATERMARK TEXT
-                  </label>
+                  <label className="text-xs font-bold text-[#102A43] block mb-1">WATERMARK TEXT</label>
                   <input
                     type="text"
                     value={wmText}
                     onChange={(e) => setWmText(e.target.value)}
-                    placeholder="© 2026 Your Name or Brand"
-                    className="w-full p-2.5 rounded-xl border border-[#E9DCC8] text-xs font-bold text-[#102A43] bg-white focus:outline-none focus:border-[#D98218]"
+                    placeholder="e.g. Confidential, Copyright 2026"
+                    className="w-full p-2.5 bg-white border border-[#E9DCC8] rounded-xl text-xs font-bold text-[#102A43]"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-bold text-[#102A43] block mb-1">Font Size</label>
+                    <label className="text-xs font-bold text-[#102A43] block mb-1">FONT SIZE ({fontSize}px)</label>
                     <input
-                      type="number"
-                      min="14"
-                      max="140"
+                      type="range"
+                      min="16"
+                      max="96"
                       value={fontSize}
                       onChange={(e) => setFontSize(Number(e.target.value))}
-                      className="w-full p-2 rounded-lg border border-[#E9DCC8] text-xs font-bold bg-white"
+                      className="w-full accent-[#D98218] cursor-pointer mt-1"
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-[#102A43] block mb-1">Text Color</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-[#102A43]">TEXT COLOR</label>
                     <input
                       type="color"
                       value={fontColor}
                       onChange={(e) => setFontColor(e.target.value)}
-                      className="w-full h-8 rounded-lg cursor-pointer border border-[#E9DCC8]"
+                      className="w-9 h-9 rounded-lg border border-[#E9DCC8] cursor-pointer"
                     />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-bold text-[#102A43] block mb-1">Rotation</label>
-                    <select
-                      value={rotation}
-                      onChange={(e) => setRotation(Number(e.target.value))}
-                      className="w-full p-2 rounded-lg border border-[#E9DCC8] text-xs font-bold bg-white"
-                    >
-                      <option value="0">0° Horizontal</option>
-                      <option value="-30">-30° Diagonal</option>
-                      <option value="-45">-45° Diagonal</option>
-                      <option value="90">90° Vertical</option>
-                    </select>
                   </div>
                 </div>
               </div>
             ) : (
               <div>
-                <label className="text-xs font-bold text-[#102A43] block mb-1">
-                  UPLOAD LOGO / STAMP (PNG / SVG / JPG)
-                </label>
+                <label className="text-xs font-bold text-[#102A43] block mb-1.5">UPLOAD LOGO IMAGE</label>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setLogoFile(e.target.files[0]);
-                    }
-                  }}
-                  className="w-full p-2 rounded-xl border border-[#E9DCC8] text-xs bg-white file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#FFF3DF] file:text-[#D98218]"
+                  onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-[#61758A] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-[#102A43] file:text-white file:font-bold file:cursor-pointer"
                 />
               </div>
             )}
@@ -306,10 +352,19 @@ export const ImageWatermarkTool: React.FC = () => {
               )}
             </button>
           ) : (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <Check className="w-4 h-4" />
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  onClick={openResultPreview}
+                  className="w-12 h-12 rounded-xl bg-white border border-emerald-300 overflow-hidden shrink-0 cursor-pointer relative group"
+                  title="Click to preview watermarked result"
+                >
+                  {resultUrl && (
+                    <img src={resultUrl} alt="Result" className="w-full h-full object-cover" />
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                    <Eye className="w-4 h-4" />
+                  </div>
                 </div>
                 <div>
                   <h5 className="text-xs font-bold text-emerald-950">Watermark Applied</h5>
@@ -318,16 +373,40 @@ export const ImageWatermarkTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Watermarked</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openResultPreview}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Preview & Compare Result</span>
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Watermarked</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+          dimensions={modalConfig.dimensions}
+        />
       )}
     </div>
   );

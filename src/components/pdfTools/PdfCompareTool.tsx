@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Check, AlertCircle, RefreshCw, GitCompare, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { Upload, Check, AlertCircle, RefreshCw, GitCompare, ChevronLeft, ChevronRight, FileText, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
 import { compareTwoPdfFiles, PdfComparisonResult } from '../../services/pdf/comparePdfService';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfCompareTool: React.FC = () => {
   const [file1, setFile1] = useState<File | null>(null);
@@ -12,6 +13,15 @@ export const PdfCompareTool: React.FC = () => {
   const [result, setResult] = useState<PdfComparisonResult | null>(null);
   const [activePageIdx, setActivePageIdx] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewFile, setReviewFile] = useState<File | null>(null);
+
+  const openDocumentReview = (f: File) => {
+    setReviewFile(f);
+    setIsReviewOpen(true);
+  };
 
   const handleCompare = async () => {
     if (!file1 || !file2) {
@@ -79,16 +89,27 @@ export const PdfCompareTool: React.FC = () => {
                   {(file1.size / 1024).toFixed(1)} KB
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setFile1(null);
-                  setResult(null);
-                }}
-                className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-              >
-                Change
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => openDocumentReview(file1)}
+                  className="px-2.5 py-1 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                  title="Review original document"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Review</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFile1(null);
+                    setResult(null);
+                  }}
+                  className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer px-1"
+                >
+                  Change
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -123,16 +144,27 @@ export const PdfCompareTool: React.FC = () => {
                   {(file2.size / 1024).toFixed(1)} KB
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setFile2(null);
-                  setResult(null);
-                }}
-                className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-              >
-                Change
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => openDocumentReview(file2)}
+                  className="px-2.5 py-1 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                  title="Review modified document"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Review</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFile2(null);
+                    setResult(null);
+                  }}
+                  className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer px-1"
+                >
+                  Change
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -291,6 +323,18 @@ export const PdfCompareTool: React.FC = () => {
             </div>
           )}
         </div>
+      )}
+      {/* Review Modal */}
+      {isReviewOpen && reviewFile && (
+        <PdfDocumentReviewModal
+          file={reviewFile}
+          title={`${reviewFile.name} (Review Document)`}
+          initialPage={1}
+          onClose={() => {
+            setIsReviewOpen(false);
+            setReviewFile(null);
+          }}
+        />
       )}
     </div>
   );

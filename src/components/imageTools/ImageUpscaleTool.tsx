@@ -8,13 +8,16 @@ import {
   AlertCircle,
   RefreshCw,
   Zap,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { upscaleImage } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const ImageUpscaleTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [scaleFactor, setScaleFactor] = useState<2 | 4>(2);
   const [origDims, setOrigDims] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
@@ -29,6 +32,17 @@ export const ImageUpscaleTool: React.FC = () => {
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+    dimensions?: { width: number; height: number };
+  } | null>(null);
+
   const handleFileSelect = (selected: File) => {
     if (!selected.type.startsWith('image/')) {
       setErrorMsg('Please upload a valid image file (JPG, PNG, WEBP).');
@@ -37,6 +51,8 @@ export const ImageUpscaleTool: React.FC = () => {
     setFile(selected);
     setErrorMsg(null);
     setResult(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
 
     const url = URL.createObjectURL(selected);
     setPreviewUrl(url);
@@ -56,6 +72,8 @@ export const ImageUpscaleTool: React.FC = () => {
     try {
       const res = await upscaleImage(file, scaleFactor);
       setResult(res);
+      const resUrl = URL.createObjectURL(res.blob);
+      setResultUrl(resUrl);
       setIsProcessing(false);
       try {
         confetti({ particleCount: 50, spread: 60 });
@@ -70,14 +88,39 @@ export const ImageUpscaleTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    const url = URL.createObjectURL(result.blob);
+    const url = resultUrl || URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!resultUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+
+  const openOriginalPreview = () => {
+    if (!file || !previewUrl) return;
+    setModalConfig({
+      title: `${file.name} (Original Image)`,
+      imageSrc: previewUrl,
+      fileName: file.name,
+      fileSizeStr: `${(file.size / 1024).toFixed(1)} KB`,
+      dimensions: origDims,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!result || !resultUrl) return;
+    setModalConfig({
+      title: `${result.fileName} (${scaleFactor}X Upscaled Result)`,
+      imageSrc: resultUrl,
+      compareSrc: previewUrl || undefined,
+      fileName: result.fileName,
+      fileSizeStr: `${(result.blob.size / 1024).toFixed(1)} KB`,
+      dimensions: { width: result.width, height: result.height },
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -111,14 +154,22 @@ export const ImageUpscaleTool: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column: Image Preview & Dimensions Comparison */}
           <div className="lg:col-span-7 flex flex-col items-center">
-            <div className="w-full bg-[#FAF5EC] rounded-3xl p-6 border border-[#E9DCC8] shadow-inner flex items-center justify-center min-h-[380px] overflow-hidden">
+            <div className="w-full bg-[#FAF5EC] rounded-3xl p-6 border border-[#E9DCC8] shadow-inner flex flex-col items-center justify-center min-h-[380px] overflow-hidden relative group">
               {previewUrl && (
                 <img
                   src={previewUrl}
                   alt="Original"
-                  className="max-h-[380px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain"
+                  className="max-h-[340px] max-w-full rounded-2xl shadow-md border border-[#E9DCC8] object-contain"
                 />
               )}
+              <button
+                type="button"
+                onClick={openOriginalPreview}
+                className="mt-3 px-3 py-1.5 bg-white hover:bg-[#FFF8EE] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Original Image Full-Screen</span>
+              </button>
             </div>
 
             {/* Resolution Metric Badges */}
@@ -139,8 +190,11 @@ export const ImageUpscaleTool: React.FC = () => {
 
             <button
               onClick={() => {
+                if (previewUrl) URL.revokeObjectURL(previewUrl);
+                if (resultUrl) URL.revokeObjectURL(resultUrl);
                 setFile(null);
                 setPreviewUrl(null);
+                setResultUrl(null);
                 setResult(null);
               }}
               className="mt-3 text-xs text-[#D98218] font-bold hover:underline cursor-pointer"
@@ -220,25 +274,51 @@ export const ImageUpscaleTool: React.FC = () => {
             )}
 
             {result && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
-                <div>
-                  <h4 className="text-xs font-bold text-emerald-900">Upscaled Successfully!</h4>
-                  <p className="text-[11px] text-emerald-700">
-                    {result.width} × {result.height} px · {scaleFactor}X resolution
-                  </p>
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col gap-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-emerald-900">Upscaled Successfully!</h4>
+                    <p className="text-[11px] text-emerald-700">
+                      {result.width} × {result.height} px · {scaleFactor}X resolution
+                    </p>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openResultPreview}
+                    className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Preview & Compare {scaleFactor}X</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="flex-1 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer min-w-[120px]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+          dimensions={modalConfig.dimensions}
+        />
       )}
     </div>
   );

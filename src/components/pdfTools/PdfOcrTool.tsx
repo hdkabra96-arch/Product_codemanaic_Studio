@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Download, Check, AlertCircle, RefreshCw, ScanText, Copy } from 'lucide-react';
+import { Upload, Download, Check, AlertCircle, RefreshCw, ScanText, Copy, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { performOcrOnPdf, OcrResult } from '../../services/pdf/ocrImageExtractService';
 import { fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfOcrTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -13,6 +14,7 @@ export const PdfOcrTool: React.FC = () => {
   const [result, setResult] = useState<OcrResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const handleStartOcr = async () => {
     if (!file) return;
@@ -93,15 +95,26 @@ export const PdfOcrTool: React.FC = () => {
               <p className="font-bold text-[#102A43] truncate max-w-xs">{file.name}</p>
               <p className="text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setResult(null);
-              }}
-              className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsReviewOpen(true)}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Review document properly"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResult(null);
+                }}
+                className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
+              >
+                Change
+              </button>
+            </div>
           </div>
 
           <div className="p-3 bg-[#FAF5EC] rounded-xl border border-[#E9DCC8] flex items-center justify-between text-xs">
@@ -186,6 +199,15 @@ export const PdfOcrTool: React.FC = () => {
             </button>
           )}
         </div>
+      )}
+      {/* Review Modal */}
+      {isReviewOpen && file && (
+        <PdfDocumentReviewModal
+          file={file}
+          title={`${file.name} (Review Scanned PDF)`}
+          initialPage={1}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

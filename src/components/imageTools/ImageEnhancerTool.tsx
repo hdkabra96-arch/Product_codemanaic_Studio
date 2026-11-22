@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Upload, Download, RefreshCw, Check, AlertCircle, Sparkles, Sliders } from 'lucide-react';
+import { Upload, Download, RefreshCw, Check, AlertCircle, Sparkles, Sliders, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { enhanceImage } from '../../services/image/imageProcessingService';
+import { enhanceImage, getImageDimensions } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const ImageEnhancerTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [enhancedUrl, setEnhancedUrl] = useState<string | null>(null);
+  const [origDims, setOrigDims] = useState<{ width: number; height: number } | null>(null);
 
   // Enhancer presets & toggles
   const [sharpen, setSharpen] = useState<boolean>(true);
@@ -25,7 +27,18 @@ export const ImageEnhancerTool: React.FC = () => {
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleFileSelect = (selected: File) => {
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+    dimensions?: { width: number; height: number };
+  } | null>(null);
+
+  const handleFileSelect = async (selected: File) => {
     if (!selected.type.startsWith('image/')) {
       setErrorMsg('Please select a valid image file.');
       return;
@@ -33,10 +46,18 @@ export const ImageEnhancerTool: React.FC = () => {
     setFile(selected);
     setErrorMsg(null);
     setResult(null);
+    if (enhancedUrl) URL.revokeObjectURL(enhancedUrl);
     setEnhancedUrl(null);
 
     const url = URL.createObjectURL(selected);
     setPreviewUrl(url);
+
+    try {
+      const dims = await getImageDimensions(selected);
+      setOrigDims(dims);
+    } catch {
+      // ignore
+    }
   };
 
   const handleEnhance = async () => {
@@ -70,14 +91,14 @@ export const ImageEnhancerTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    const url = URL.createObjectURL(result.blob);
+    const url = enhancedUrl || URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!enhancedUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
   const handleReset = () => {
@@ -86,8 +107,34 @@ export const ImageEnhancerTool: React.FC = () => {
     setFile(null);
     setPreviewUrl(null);
     setEnhancedUrl(null);
+    setOrigDims(null);
     setResult(null);
     setErrorMsg(null);
+  };
+
+  const openOriginalPreview = () => {
+    if (!file || !previewUrl) return;
+    setModalConfig({
+      title: `${file.name} (Original Image)`,
+      imageSrc: previewUrl,
+      fileName: file.name,
+      fileSizeStr: `${(file.size / 1024).toFixed(1)} KB`,
+      dimensions: origDims || undefined,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!result || !enhancedUrl) return;
+    setModalConfig({
+      title: `${result.fileName} (Enhanced Result)`,
+      imageSrc: enhancedUrl,
+      compareSrc: previewUrl || undefined,
+      fileName: result.fileName,
+      fileSizeStr: `${(result.blob.size / 1024).toFixed(1)} KB`,
+      dimensions: { width: result.newWidth, height: result.newHeight },
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -119,18 +166,30 @@ export const ImageEnhancerTool: React.FC = () => {
         </label>
       ) : (
         <div className="space-y-4">
-          {/* Header */}
-          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex items-center justify-between">
+          {/* Header Card with Preview Option */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-sm font-bold text-[#102A43] truncate max-w-xs">{file.name}</span>
-              <span className="text-xs text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</span>
+              <span className="text-xs text-[#61758A]">
+                {(file.size / 1024).toFixed(1)} KB {origDims ? ` • ${origDims.width} × ${origDims.height} px` : ''}
+              </span>
             </div>
-            <button
-              onClick={handleReset}
-              className="text-xs font-semibold text-[#61758A] hover:text-red-600 cursor-pointer"
-            >
-              Change File
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openOriginalPreview}
+                className="px-3.5 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Image</span>
+              </button>
+              <button
+                onClick={handleReset}
+                className="text-xs font-semibold text-[#61758A] hover:text-red-600 px-2 cursor-pointer"
+              >
+                Change File
+              </button>
+            </div>
           </div>
 
           {/* Preview Container with Before / After toggle */}
@@ -246,7 +305,7 @@ export const ImageEnhancerTool: React.FC = () => {
               )}
             </button>
           ) : (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <Check className="w-4 h-4" />
@@ -258,16 +317,40 @@ export const ImageEnhancerTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Enhanced</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openResultPreview}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Preview & Compare Result</span>
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="px-5 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Enhanced</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+          dimensions={modalConfig.dimensions}
+        />
       )}
     </div>
   );

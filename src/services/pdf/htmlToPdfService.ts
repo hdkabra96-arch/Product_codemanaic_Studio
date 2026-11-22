@@ -16,33 +16,45 @@ function parseHtmlContent(html: string): { title: string; lines: string[] } {
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '');
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(cleaned, 'text/html');
+  if (typeof DOMParser !== 'undefined') {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(cleaned, 'text/html');
 
-  const title = doc.title || 'Converted Webpage';
+    const title = doc.title || 'Converted Webpage';
 
-  const lines: string[] = [];
-  const walk = (node: Node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.trim();
-      if (text) lines.push(text);
-    } else if (node.nodeType === Node.ELEMENT_NODE) {
-      const el = node as HTMLElement;
-      const tag = el.tagName.toLowerCase();
-      if (['h1', 'h2', 'h3', 'h4', 'p', 'li', 'div', 'tr'].includes(tag)) {
-        if (el.innerText && el.innerText.trim()) {
-          lines.push(el.innerText.trim());
-          return; // avoid repeating children
+    const lines: string[] = [];
+    const walk = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent?.trim();
+        if (text) lines.push(text);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        const tag = el.tagName.toLowerCase();
+        if (['h1', 'h2', 'h3', 'h4', 'p', 'li', 'div', 'tr'].includes(tag)) {
+          if (el.innerText && el.innerText.trim()) {
+            lines.push(el.innerText.trim());
+            return; // avoid repeating children
+          }
+        }
+        for (let i = 0; i < node.childNodes.length; i++) {
+          walk(node.childNodes[i]);
         }
       }
-      for (let i = 0; i < node.childNodes.length; i++) {
-        walk(node.childNodes[i]);
-      }
-    }
-  };
+    };
 
-  walk(doc.body || doc.documentElement);
-  return { title, lines: lines.filter(Boolean) };
+    walk(doc.body || doc.documentElement);
+    return { title, lines: lines.filter(Boolean) };
+  } else {
+    // Fallback for SSR or non-browser environments
+    const titleMatch = cleaned.match(/<title>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : 'Converted Webpage';
+    const lines = cleaned
+      .replace(/<[^>]+>/g, '\n')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    return { title, lines };
+  }
 }
 
 /**

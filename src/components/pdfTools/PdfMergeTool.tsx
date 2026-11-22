@@ -1,8 +1,20 @@
 import React, { useState } from 'react';
-import { Upload, ArrowUp, ArrowDown, Trash2, Layers, Download, Check, RefreshCw } from 'lucide-react';
+import {
+  Upload,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Layers,
+  Download,
+  Check,
+  RefreshCw,
+  Eye,
+  FileText,
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { mergePdfFiles } from '../../services/pdf/mergeSplitService';
 import { getPdfPageCount, fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 interface FileWithMeta {
   file: File;
@@ -15,6 +27,15 @@ export const PdfMergeTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [mergedBlob, setMergedBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewData, setReviewData] = useState<{
+    file?: File | null;
+    pdfData?: Uint8Array | null;
+    title: string;
+    initialPage?: number;
+  } | null>(null);
 
   const handleFilesAdded = async (files: FileList | null) => {
     if (!files) return;
@@ -65,6 +86,31 @@ export const PdfMergeTool: React.FC = () => {
     setFileList((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const openFileReview = (item: FileWithMeta) => {
+    setReviewData({
+      file: item.file,
+      title: `${item.file.name} (${item.pageCount} pages)`,
+      initialPage: 1,
+    });
+    setIsReviewOpen(true);
+  };
+
+  const openMergedReview = () => {
+    if (!mergedBlob) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setReviewData({
+          pdfData: new Uint8Array(reader.result as ArrayBuffer),
+          title: 'merged_document.pdf (Merged Preview)',
+          initialPage: 1,
+        });
+        setIsReviewOpen(true);
+      }
+    };
+    reader.readAsArrayBuffer(mergedBlob);
+  };
+
   const handleMerge = async () => {
     if (fileList.length < 2) {
       setErrorMsg('Please add at least 2 PDF files to merge.');
@@ -104,8 +150,8 @@ export const PdfMergeTool: React.FC = () => {
   };
 
   return (
-    <div className="space-y-5">
-      {/* Upload Zone */}
+    <div className="space-y-4">
+      {/* Upload Box */}
       <label className="border-2 border-dashed border-[#E9DCC8] hover:border-[#D98218] bg-[#FAF5EC]/60 hover:bg-[#FFF3DF]/40 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all">
         <input
           type="file"
@@ -121,7 +167,7 @@ export const PdfMergeTool: React.FC = () => {
           Click or drop multiple PDF files here
         </span>
         <span className="text-xs text-[#61758A] mt-0.5">
-          Select multiple files to combine in your desired order
+          Select multiple files to combine in your desired order · Review pages anytime
         </span>
       </label>
 
@@ -136,10 +182,10 @@ export const PdfMergeTool: React.FC = () => {
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-bold text-[#102A43]">
             <span>FILES TO MERGE ({fileList.length})</span>
-            <span className="text-[#61758A]">Reorder as needed</span>
+            <span className="text-[#61758A]">Reorder or click eye to review document</span>
           </div>
 
-          <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
             {fileList.map((item, idx) => (
               <div
                 key={item.id}
@@ -152,13 +198,24 @@ export const PdfMergeTool: React.FC = () => {
                   <div className="truncate">
                     <p className="text-xs font-bold text-[#102A43] truncate">{item.file.name}</p>
                     <p className="text-[11px] text-[#61758A]">
-                      {(item.file.size / 1024).toFixed(1)} KB · {item.pageCount} {item.pageCount === 1 ? 'page' : 'pages'}
+                      {(item.file.size / 1024).toFixed(1)} KB · {item.pageCount}{' '}
+                      {item.pageCount === 1 ? 'page' : 'pages'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
+                    type="button"
+                    onClick={() => openFileReview(item)}
+                    className="px-2 py-1 bg-[#FAF5EC] hover:bg-[#FFF3DF] text-[#D98218] rounded-lg text-xs font-semibold flex items-center gap-1 cursor-pointer border border-[#E9DCC8]"
+                    title="Review document pages"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Review</span>
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => moveItem(idx, 'up')}
                     disabled={idx === 0}
                     className="p-1 text-[#61758A] hover:text-[#102A43] disabled:opacity-30 cursor-pointer"
@@ -167,6 +224,7 @@ export const PdfMergeTool: React.FC = () => {
                     <ArrowUp className="w-4 h-4" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => moveItem(idx, 'down')}
                     disabled={idx === fileList.length - 1}
                     className="p-1 text-[#61758A] hover:text-[#102A43] disabled:opacity-30 cursor-pointer"
@@ -175,8 +233,9 @@ export const PdfMergeTool: React.FC = () => {
                     <ArrowDown className="w-4 h-4" />
                   </button>
                   <button
+                    type="button"
                     onClick={() => removeItem(idx)}
-                    className="p-1 text-[#61758A] hover:text-red-600 cursor-pointer ml-1"
+                    className="p-1 text-[#61758A] hover:text-red-600 cursor-pointer ml-0.5"
                     title="Remove"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -190,9 +249,9 @@ export const PdfMergeTool: React.FC = () => {
 
       {/* Merged Outcome / Action */}
       {mergedBlob ? (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
               <Check className="w-5 h-5" />
             </div>
             <div>
@@ -202,7 +261,16 @@ export const PdfMergeTool: React.FC = () => {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={openMergedReview}
+              className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Review merged PDF before downloading"
+            >
+              <Eye className="w-3.5 h-3.5 text-emerald-700" />
+              <span>Review Merged PDF</span>
+            </button>
             <button
               onClick={handleDownload}
               className="px-4 py-2 bg-[#D98218] hover:bg-[#C66A08] text-white text-xs font-bold rounded-full shadow-sm flex items-center gap-1.5 cursor-pointer"
@@ -215,7 +283,7 @@ export const PdfMergeTool: React.FC = () => {
                 setMergedBlob(null);
                 setFileList([]);
               }}
-              className="p-2 bg-white border border-[#E9DCC8] rounded-full text-[#102A43] cursor-pointer"
+              className="p-2 bg-white border border-[#E9DCC8] rounded-full text-[#102A43] hover:bg-gray-50 cursor-pointer"
               title="Start over"
             >
               <RefreshCw className="w-4 h-4" />
@@ -231,6 +299,17 @@ export const PdfMergeTool: React.FC = () => {
           <Layers className="w-4 h-4" />
           <span>{isProcessing ? 'Merging PDFs...' : `Merge ${fileList.length} Files`}</span>
         </button>
+      )}
+
+      {/* Full Document Review Modal */}
+      {isReviewOpen && reviewData && (
+        <PdfDocumentReviewModal
+          file={reviewData.file}
+          pdfData={reviewData.pdfData}
+          title={reviewData.title}
+          initialPage={reviewData.initialPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

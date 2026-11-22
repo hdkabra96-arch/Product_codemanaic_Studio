@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Upload, Download, Check, AlertCircle, RefreshCw, FileImage, Archive } from 'lucide-react';
+import { Upload, Download, Check, AlertCircle, RefreshCw, FileImage, Archive, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { extractImagesFromPdf, ExtractedImageItem } from '../../services/pdf/ocrImageExtractService';
 import { fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfImageExtractionTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -11,6 +12,7 @@ export const PdfImageExtractionTool: React.FC = () => {
   const [images, setImages] = useState<ExtractedImageItem[]>([]);
   const [zipBlob, setZipBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const handleExtract = async (selected: File) => {
     setFile(selected);
@@ -92,16 +94,27 @@ export const PdfImageExtractionTool: React.FC = () => {
               <p className="font-bold text-[#102A43] truncate max-w-xs">{file.name}</p>
               <p className="text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setImages([]);
-                setZipBlob(null);
-              }}
-              className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsReviewOpen(true)}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Review document properly"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setImages([]);
+                  setZipBlob(null);
+                }}
+                className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
+              >
+                Change
+              </button>
+            </div>
           </div>
 
           {errorMsg && (
@@ -173,6 +186,15 @@ export const PdfImageExtractionTool: React.FC = () => {
             </div>
           ) : null}
         </div>
+      )}
+      {/* Review Modal */}
+      {isReviewOpen && file && (
+        <PdfDocumentReviewModal
+          file={file}
+          title={`${file.name} (Review Document)`}
+          initialPage={1}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

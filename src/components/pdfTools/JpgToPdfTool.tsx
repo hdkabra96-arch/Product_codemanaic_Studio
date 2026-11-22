@@ -10,9 +10,11 @@ import {
   ArrowUp,
   ArrowDown,
   FileCheck,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { convertImagesToPdf, JpgToPdfOptions } from '../../services/pdf/jpgToPdfService';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 interface ImageItem {
   id: string;
@@ -29,6 +31,14 @@ export const JpgToPdfTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultBytes, setResultBytes] = useState<Uint8Array | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+
+  const openResultReview = () => {
+    if (!resultBytes) return;
+    setIsReviewOpen(true);
+  };
 
   const handleAddFiles = (files: FileList | null) => {
     if (!files) return;
@@ -336,17 +346,37 @@ export const JpgToPdfTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download PDF</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openResultReview}
+                  className="px-4 py-2.5 rounded-full bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Eye className="w-4 h-4 text-emerald-700" />
+                  <span>Review Generated PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Review Modal */}
+      {isReviewOpen && resultBytes && (
+        <PdfDocumentReviewModal
+          pdfData={resultBytes}
+          title="Generated PDF from Images (Review)"
+          initialPage={1}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

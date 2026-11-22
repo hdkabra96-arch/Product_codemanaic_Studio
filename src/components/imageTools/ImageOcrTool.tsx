@@ -1,20 +1,139 @@
-import React, { useState } from 'react';
-import { Upload, Download, RefreshCw, Check, AlertCircle, ScanText, Copy, Languages } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  Upload,
+  Download,
+  RefreshCw,
+  Check,
+  AlertCircle,
+  ScanText,
+  Copy,
+  Languages,
+  Eye,
+  Sliders,
+  Sparkles,
+  Filter,
+  Crop,
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createWorker } from 'tesseract.js';
+import { ImagePreviewModal } from './ImagePreviewModal';
+import { loadImage } from '../../services/image/imageProcessingService';
+
+/**
+ * Preprocess image for maximum Tesseract OCR accuracy:
+ * Inverts dark backgrounds (light text on dark background -> dark on white),
+ * sharpens contrast, and upscales small characters 2x.
+ */
+async function preprocessForOcr(
+  imageSource: File | Blob | string,
+  options: {
+    autoInvert?: boolean;
+    enhanceContrast?: boolean;
+    scale?: number;
+  } = {}
+): Promise<Blob> {
+  const img = await loadImage(imageSource);
+  const srcW = img.naturalWidth || img.width;
+  const srcH = img.naturalHeight || img.height;
+
+  const scale = options.scale || 2.0; // 2x supersampling for fine character edges
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(srcW * scale);
+  canvas.height = Math.round(srcH * scale);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Canvas context failed');
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imgData.data;
+
+  // Calculate average luminance to auto-detect dark banner backgrounds
+  let totalLum = 0;
+  const step = 4;
+  for (let i = 0; i < data.length; i += step * 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    totalLum += 0.299 * r + 0.587 * g + 0.114 * b;
+  }
+  const avgLum = totalLum / (data.length / (step * 4));
+  const isDarkBackground = options.autoInvert !== false && avgLum < 128;
+
+  // Apply contrast normalization and luminance inversion if dark
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+    // Invert if dark background so OCR reads dark text on clean white
+    if (isDarkBackground) {
+      gray = 255 - gray;
+    }
+
+    if (options.enhanceContrast !== false) {
+      // Contrast stretching
+      gray = gray > 140 ? Math.min(255, gray * 1.2) : Math.max(0, gray * 0.8);
+    }
+
+    data[i] = gray;
+    data[i + 1] = gray;
+    data[i + 2] = gray;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b!), 'image/png'));
+}
+
+/**
+ * Filter OCR noise, phantom symbols, and orphaned artifacts
+ */
+function cleanOcrNoise(rawText: string): string {
+  return rawText
+    // Remove isolated single punctuation or stray symbols on line boundaries
+    .replace(/^[\s|~^°_«»¢€®™•·*#\-=+]+/gm, '')
+    .replace(/[\s|~^°_«»¢€®™•·*#\-=+]+$/gm, '')
+    // Remove repeated phantom symbols like || or °° or __
+    .replace(/[|~^°«»¢®™]{2,}/g, ' ')
+    // Normalize lines: filter out lines that have no alphanumeric content
+    .split('\n')
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return true; // keep paragraph breaks
+      // If line has no letters or digits and is short noise, drop it
+      if (!/[a-zA-Z0-9]/.test(trimmed) && trimmed.length <= 4) return false;
+      return true;
+    })
+    .join('\n')
+    // Remove multiple consecutive spaces
+    .replace(/[ \t]{2,}/g, ' ')
+    // Remove excess blank lines
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
 
 export const ImageOcrTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [language, setLanguage] = useState<string>('eng');
 
+  // Pre-processing & Noise Filter Options
+  const [autoEnhance, setAutoEnhance] = useState<boolean>(true);
+  const [filterNoise, setFilterNoise] = useState<boolean>(true);
+
   // OCR state
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState<number>(0);
   const [statusText, setStatusText] = useState<string>('');
+  const [rawExtractedText, setRawExtractedText] = useState<string>('');
   const [extractedText, setExtractedText] = useState<string>('');
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const handleFileSelect = (selected: File) => {
     if (!selected.type.startsWith('image/')) {
@@ -23,6 +142,7 @@ export const ImageOcrTool: React.FC = () => {
     }
     setFile(selected);
     setErrorMsg(null);
+    setRawExtractedText('');
     setExtractedText('');
     setProgress(0);
 
@@ -34,33 +154,51 @@ export const ImageOcrTool: React.FC = () => {
     if (!file) return;
     setIsProcessing(true);
     setProgress(5);
-    setStatusText('Initializing OCR Engine...');
+    setStatusText('Optimizing image contrast & resolution...');
     setErrorMsg(null);
 
     let worker: any = null;
     try {
+      // 1. Preprocess image for maximum OCR accuracy
+      let processedBlob: Blob = file;
+      if (autoEnhance) {
+        processedBlob = await preprocessForOcr(file, {
+          autoInvert: true,
+          enhanceContrast: true,
+          scale: 2.0,
+        });
+      }
+
+      setProgress(15);
+      setStatusText('Initializing OCR Engine...');
+
+      // 2. Initialize Tesseract worker
       worker = await createWorker(language, undefined, {
         logger: (m) => {
           if (m.status === 'recognizing text') {
-            const pct = Math.round((m.progress || 0) * 80) + 15;
+            const pct = Math.round((m.progress || 0) * 75) + 20;
             setProgress(pct);
-            setStatusText(`Recognizing text... ${Math.round((m.progress || 0) * 100)}%`);
+            setStatusText(`Recognizing text accurately... ${Math.round((m.progress || 0) * 100)}%`);
           } else if (m.status === 'loading tesseract core') {
-            setProgress(10);
-            setStatusText('Loading OCR Core engine...');
+            setProgress(18);
+            setStatusText('Loading OCR Neural Core...');
           } else if (m.status === 'loading language traineddata') {
-            setProgress(15);
+            setProgress(20);
             setStatusText(`Loading ${language.toUpperCase()} language model...`);
           }
         },
       });
 
-      const ret = await worker.recognize(file);
+      const ret = await worker.recognize(processedBlob);
       const text = ret.data.text || '';
+
+      setRawExtractedText(text);
+
+      const finalText = filterNoise ? cleanOcrNoise(text) : text;
+      setExtractedText(finalText);
 
       setProgress(100);
       setStatusText('Text recognized successfully!');
-      setExtractedText(text);
       setIsProcessing(false);
 
       try {
@@ -76,6 +214,13 @@ export const ImageOcrTool: React.FC = () => {
       if (worker) {
         await worker.terminate();
       }
+    }
+  };
+
+  const handleToggleNoiseFilter = (clean: boolean) => {
+    setFilterNoise(clean);
+    if (rawExtractedText) {
+      setExtractedText(clean ? cleanOcrNoise(rawExtractedText) : rawExtractedText);
     }
   };
 
@@ -124,7 +269,7 @@ export const ImageOcrTool: React.FC = () => {
             Select an image with text to extract
           </span>
           <span className="text-xs text-[#61758A] mt-1">
-            Documents, receipts, invoices, screenshots, photos & signs
+            Documents, receipts, invoices, screenshots, photos, posters & signs
           </span>
           <span className="mt-4 px-4 py-1.5 rounded-full bg-white border border-[#E9DCC8] text-xs font-bold text-[#102A43] shadow-sm">
             Browse Image
@@ -147,6 +292,14 @@ export const ImageOcrTool: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPreviewOpen(true)}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Image</span>
+              </button>
               <div className="flex items-center gap-1.5 bg-[#FAF5EC] px-3 py-1.5 rounded-xl border border-[#E9DCC8]">
                 <Languages className="w-3.5 h-3.5 text-[#D98218]" />
                 <select
@@ -165,12 +318,46 @@ export const ImageOcrTool: React.FC = () => {
               </div>
 
               <button
-                onClick={() => setFile(null)}
+                onClick={() => {
+                  setFile(null);
+                  setExtractedText('');
+                  setRawExtractedText('');
+                }}
                 className="text-xs font-semibold text-[#61758A] hover:text-red-600 px-2 cursor-pointer"
               >
                 Change
               </button>
             </div>
+          </div>
+
+          {/* AI Clean & Enhance Options */}
+          <div className="p-4 bg-[#FAF5EC] rounded-2xl border border-[#E9DCC8] flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-[#102A43]">
+                <input
+                  type="checkbox"
+                  checked={autoEnhance}
+                  onChange={(e) => setAutoEnhance(e.target.checked)}
+                  className="rounded text-[#D98218] focus:ring-[#D98218] w-4 h-4 cursor-pointer"
+                />
+                <span className="flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-[#D98218]" /> Auto-Contrast & Invert Dark Banners
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-[#102A43]">
+                <input
+                  type="checkbox"
+                  checked={filterNoise}
+                  onChange={(e) => handleToggleNoiseFilter(e.target.checked)}
+                  className="rounded text-[#D98218] focus:ring-[#D98218] w-4 h-4 cursor-pointer"
+                />
+                <span className="flex items-center gap-1">
+                  <Filter className="w-3.5 h-3.5 text-[#D98218]" /> Filter OCR Noise & Stray Symbols
+                </span>
+              </label>
+            </div>
+            <span className="text-[11px] text-[#61758A]">2x Super-Resolution OCR Pipeline</span>
           </div>
 
           {/* Progress Bar when processing */}
@@ -201,7 +388,7 @@ export const ImageOcrTool: React.FC = () => {
             <button
               onClick={handleRunOcr}
               disabled={isProcessing}
-              className="w-full py-3 rounded-full bg-[#D98218] hover:bg-[#C66A08] disabled:opacity-50 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3.5 rounded-full bg-[#D98218] hover:bg-[#C66A08] disabled:opacity-50 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               {isProcessing ? (
                 <>
@@ -209,7 +396,7 @@ export const ImageOcrTool: React.FC = () => {
                   <span>Extracting Optical Characters...</span>
                 </>
               ) : (
-                <span>Extract Text with OCR</span>
+                <span>Extract Text with AI OCR</span>
               )}
             </button>
           ) : (
@@ -237,22 +424,38 @@ export const ImageOcrTool: React.FC = () => {
               </div>
 
               <textarea
-                rows={8}
+                rows={9}
                 value={extractedText}
                 onChange={(e) => setExtractedText(e.target.value)}
-                placeholder="Extracted text will appear here..."
-                className="w-full p-4 rounded-xl border border-[#E9DCC8] bg-white text-sm text-[#102A43] leading-relaxed focus:outline-none focus:border-[#D98218]"
+                className="w-full p-4 rounded-2xl border border-[#E9DCC8] bg-white font-sans text-sm text-[#102A43] leading-relaxed focus:outline-none focus:border-[#D98218] shadow-inner"
               />
 
-              <button
-                onClick={handleRunOcr}
-                className="text-xs font-semibold text-[#D98218] hover:underline cursor-pointer"
-              >
-                Re-run OCR with different settings
-              </button>
+              <div className="flex items-center justify-between text-xs text-[#61758A] pt-1">
+                <span>You can edit the extracted text directly in the box above before copying or downloading.</span>
+                <button
+                  type="button"
+                  onClick={handleRunOcr}
+                  disabled={isProcessing}
+                  className="font-bold text-[#D98218] hover:underline cursor-pointer"
+                >
+                  Re-extract
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewUrl && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={file ? `${file.name} (Source Image)` : 'Image Review'}
+          imageSrc={previewUrl}
+          fileName={file?.name}
+          fileSizeStr={file ? `${(file.size / 1024).toFixed(1)} KB` : undefined}
+        />
       )}
     </div>
   );

@@ -1,22 +1,42 @@
 import React, { useState } from 'react';
-import { Upload, Scissors, Download, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import {
+  Upload,
+  Scissors,
+  Download,
+  Check,
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { splitPdf } from '../../services/pdf/mergeSplitService';
-import { getPdfPageCount, fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { getPdfPageCount, fileToArrayBuffer, renderAllPdfThumbnails } from '../../services/pdf/pdfLibUtils';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfSplitTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [totalPages, setTotalPages] = useState<number>(0);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const [showThumbnails, setShowThumbnails] = useState<boolean>(true);
   const [splitMode, setSplitMode] = useState<'each_page' | 'ranges'>('each_page');
   const [rangesStr, setRangesStr] = useState('1-2; 3-5');
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<{ blob: Blob; fileName: string; filesCount: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewPage, setReviewPage] = useState<number>(1);
+
   const handleFileSelected = async (selected: File | null) => {
     if (!selected) return;
     setErrorMsg(null);
     setResult(null);
+    setThumbnails([]);
+
     try {
       const buf = await fileToArrayBuffer(selected);
       const count = await getPdfPageCount(buf);
@@ -27,9 +47,18 @@ export const PdfSplitTool: React.FC = () => {
       } else {
         setRangesStr('1');
       }
+
+      renderAllPdfThumbnails(buf, 130)
+        .then((thumbs) => setThumbnails(thumbs))
+        .catch(() => {});
     } catch {
       setErrorMsg('Could not read PDF. Please check if the file is valid and unencrypted.');
     }
+  };
+
+  const openReview = (pageNum: number = 1) => {
+    setReviewPage(pageNum);
+    setIsReviewOpen(true);
   };
 
   const handleSplit = async () => {
@@ -81,28 +110,110 @@ export const PdfSplitTool: React.FC = () => {
           </div>
           <span className="text-sm font-bold text-[#102A43]">Select PDF to split</span>
           <span className="text-xs text-[#61758A] mt-0.5">
-            Extract all pages or custom ranges
+            Extract all pages or custom ranges with visual document review
           </span>
         </label>
       ) : (
         <div className="space-y-4">
-          {/* File Card */}
-          <div className="p-3 bg-white rounded-xl border border-[#E9DCC8] flex items-center justify-between">
+          {/* File Card with Review Action */}
+          <div className="p-3.5 bg-white rounded-xl border border-[#E9DCC8] flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
             <div className="truncate">
-              <p className="text-xs font-bold text-[#102A43] truncate">{file.name}</p>
-              <p className="text-[11px] text-[#61758A]">
-                {(file.size / 1024).toFixed(1)} KB · Total Pages: <strong className="text-[#D98218]">{totalPages}</strong>
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#D98218] shrink-0" />
+                <p className="text-xs font-bold text-[#102A43] truncate">{file.name}</p>
+              </div>
+              <p className="text-[11px] text-[#61758A] mt-1">
+                {(file.size / 1024).toFixed(1)} KB · Total Pages:{' '}
+                <strong className="text-[#D98218]">{totalPages}</strong>
               </p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setResult(null);
-              }}
-              className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => openReview(1)}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Review document pages properly"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResult(null);
+                  setThumbnails([]);
+                }}
+                className="text-xs text-[#61758A] hover:text-[#D98218] font-semibold px-2 py-1 cursor-pointer"
+              >
+                Change
+              </button>
+            </div>
+          </div>
+
+          {/* Page Preview Strip */}
+          <div className="p-3 bg-white rounded-xl border border-[#E9DCC8] space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 font-bold text-[#102A43]">
+                <Eye className="w-3.5 h-3.5 text-[#D98218]" />
+                <span>Document Page Review ({totalPages} pages)</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowThumbnails(!showThumbnails)}
+                className="text-[11px] text-[#61758A] hover:text-[#D98218] flex items-center gap-1 font-semibold cursor-pointer"
+              >
+                <span>{showThumbnails ? 'Hide' : 'Show'}</span>
+                {showThumbnails ? (
+                  <ChevronUp className="w-3.5 h-3.5" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+
+            {showThumbnails && (
+              <div className="flex gap-2 overflow-x-auto pb-1 select-none">
+                {thumbnails.length > 0
+                  ? thumbnails.map((thumb, idx) => {
+                      const pageNum = idx + 1;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => openReview(pageNum)}
+                          className="group flex flex-col items-center gap-1 shrink-0 p-1 rounded-lg border border-[#E9DCC8] hover:border-[#D98218] transition-all bg-[#FAF5EC]/30 cursor-pointer"
+                          title={`Click to review page ${pageNum}`}
+                        >
+                          <div className="w-16 h-20 bg-white rounded border border-[#E9DCC8] overflow-hidden flex items-center justify-center relative">
+                            {thumb ? (
+                              <img
+                                src={thumb}
+                                alt={`Page ${pageNum}`}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <span className="text-[10px] text-[#61758A]">#{pageNum}</span>
+                            )}
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                              <Eye className="w-4 h-4" />
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-[#102A43]">
+                            Page {pageNum}
+                          </span>
+                        </button>
+                      );
+                    })
+                  : Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map((p) => (
+                      <div
+                        key={p}
+                        className="w-16 h-20 bg-gray-50 border border-dashed border-[#E9DCC8] rounded flex items-center justify-center text-[10px] text-[#61758A] shrink-0"
+                      >
+                        #{p}
+                      </div>
+                    ))}
+              </div>
+            )}
           </div>
 
           {/* Mode Selector */}
@@ -204,6 +315,16 @@ export const PdfSplitTool: React.FC = () => {
             </button>
           )}
         </div>
+      )}
+
+      {/* Full Document Review Modal */}
+      {isReviewOpen && file && (
+        <PdfDocumentReviewModal
+          file={file}
+          title={`${file.name} (Review Document)`}
+          initialPage={reviewPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

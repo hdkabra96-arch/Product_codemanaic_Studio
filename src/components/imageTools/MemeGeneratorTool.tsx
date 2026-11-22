@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Download, RefreshCw, Type, Sparkles, Image as ImageIcon, Check } from 'lucide-react';
+import { Upload, Download, RefreshCw, Type, Sparkles, Image as ImageIcon, Check, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { createMemeImage } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 interface MemeTemplate {
   id: string;
@@ -56,6 +57,7 @@ export const MemeGeneratorTool: React.FC = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Redraw canvas whenever inputs change
@@ -133,18 +135,29 @@ export const MemeGeneratorTool: React.FC = () => {
             )}
           </div>
 
-          <div className="mt-4 flex items-center gap-3 w-full justify-between">
+          <div className="mt-4 flex flex-wrap items-center gap-3 w-full justify-between">
             <span className="text-xs text-[#61758A] font-semibold">
               Live Interactive Canvas Preview
             </span>
-            <button
-              onClick={handleDownload}
-              disabled={!downloadBlob}
-              className="px-6 py-2.5 rounded-full bg-[#D98218] hover:bg-[#C66A08] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" />
-              <span>Download Meme</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsPreviewOpen(true)}
+                disabled={!imagePreview}
+                className="px-4 py-2 bg-white hover:bg-[#FFF8EE] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-full text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Full Size</span>
+              </button>
+              <button
+                onClick={handleDownload}
+                disabled={!downloadBlob}
+                className="px-6 py-2.5 rounded-full bg-[#D98218] hover:bg-[#C66A08] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download Meme</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -278,6 +291,18 @@ export const MemeGeneratorTool: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Full-Feature Image Preview Modal */}
+      {imagePreview && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title="Generated Meme Preview"
+          imageSrc={imagePreview}
+          fileName="codemaniac_meme.jpg"
+          fileSizeStr={downloadBlob ? `${(downloadBlob.size / 1024).toFixed(1)} KB` : undefined}
+        />
+      )}
     </div>
   );
 };

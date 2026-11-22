@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Download, Check, AlertCircle, RefreshCw, Stamp } from 'lucide-react';
+import { Upload, Download, Check, AlertCircle, RefreshCw, Stamp, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { applyWatermarkToPdf, WatermarkOptions } from '../../services/pdf/editorWatermarkService';
 import { renderPdfPageToCanvas, fileToArrayBuffer } from '../../services/pdf/pdfLibUtils';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 export const PdfWatermarkTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -18,6 +19,41 @@ export const PdfWatermarkTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [resultBlob, setResultBlob] = useState<Blob | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewData, setReviewData] = useState<{
+    file?: File | null;
+    pdfData?: Uint8Array | null;
+    title: string;
+    initialPage?: number;
+  } | null>(null);
+
+  const openDocumentReview = () => {
+    if (!file) return;
+    setReviewData({
+      file,
+      title: `${file.name} (Original Document)`,
+      initialPage: 1,
+    });
+    setIsReviewOpen(true);
+  };
+
+  const openResultReview = () => {
+    if (!resultBlob || !file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setReviewData({
+          pdfData: new Uint8Array(reader.result as ArrayBuffer),
+          title: `${file.name.replace(/\.[^/.]+$/, '')}_watermarked.pdf (Preview)`,
+          initialPage: 1,
+        });
+        setIsReviewOpen(true);
+      }
+    };
+    reader.readAsArrayBuffer(resultBlob);
+  };
 
   const loadPreview = async (fileObj: File) => {
     try {
@@ -113,15 +149,26 @@ export const PdfWatermarkTool: React.FC = () => {
               <p className="font-bold text-[#102A43] truncate max-w-xs">{file.name}</p>
               <p className="text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</p>
             </div>
-            <button
-              onClick={() => {
-                setFile(null);
-                setResultBlob(null);
-              }}
-              className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
-            >
-              Change
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openDocumentReview}
+                className="px-3 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Review document properly"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Document</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setResultBlob(null);
+                }}
+                className="text-[#61758A] hover:text-[#D98218] font-semibold cursor-pointer"
+              >
+                Change
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -289,6 +336,14 @@ export const PdfWatermarkTool: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={openResultReview}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-emerald-700" />
+                  <span>Review Watermarked PDF</span>
+                </button>
+                <button
                   onClick={handleDownload}
                   className="px-4 py-2 bg-[#D98218] hover:bg-[#C66A08] text-white text-xs font-bold rounded-full shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
@@ -315,6 +370,17 @@ export const PdfWatermarkTool: React.FC = () => {
             </button>
           )}
         </div>
+      )}
+
+      {/* Review Modal */}
+      {isReviewOpen && reviewData && (
+        <PdfDocumentReviewModal
+          file={reviewData.file}
+          pdfData={reviewData.pdfData}
+          title={reviewData.title}
+          initialPage={reviewData.initialPage}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

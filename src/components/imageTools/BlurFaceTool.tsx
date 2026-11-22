@@ -11,13 +11,16 @@ import {
   Check,
   AlertCircle,
   ShieldCheck,
+  Eye,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { blurImageRegions, BlurRegion } from '../../services/image/imageProcessingService';
+import { blurImageRegions, BlurRegion, getImageDimensions } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const BlurFaceTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [naturalDimensions, setNaturalDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [regions, setRegions] = useState<BlurRegion[]>([]);
   const [blurType, setBlurType] = useState<'blur' | 'pixelate' | 'blackout'>('blur');
@@ -26,6 +29,17 @@ export const BlurFaceTool: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<{ blob: Blob; fileName: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+    dimensions?: { width: number; height: number };
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -41,6 +55,8 @@ export const BlurFaceTool: React.FC = () => {
     setFile(selected);
     setErrorMsg(null);
     setResult(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
 
     const url = URL.createObjectURL(selected);
     setImageSrc(url);
@@ -66,8 +82,8 @@ export const BlurFaceTool: React.FC = () => {
     img.src = url;
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!imgRef.current) return;
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (!containerRef.current || !imgRef.current) return;
     const rect = imgRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -79,27 +95,31 @@ export const BlurFaceTool: React.FC = () => {
     setCurrentBox({ x, y, w: 0, h: 0 });
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDrawing.current || !imgRef.current) return;
     const rect = imgRef.current.getBoundingClientRect();
-    const curX = Math.min(rect.width, Math.max(0, e.clientX - rect.left));
-    const curY = Math.min(rect.height, Math.max(0, e.clientY - rect.top));
+    const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const currentY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
 
-    const left = Math.min(startPos.current.x, curX);
-    const top = Math.min(startPos.current.y, curY);
-    const w = Math.abs(curX - startPos.current.x);
-    const h = Math.abs(curY - startPos.current.y);
+    const x = Math.min(startPos.current.x, currentX);
+    const y = Math.min(startPos.current.y, currentY);
+    const w = Math.abs(currentX - startPos.current.x);
+    const h = Math.abs(currentY - startPos.current.y);
 
-    setCurrentBox({ x: left, y: top, w, h });
+    setCurrentBox({ x, y, w, h });
   };
 
-  const handleMouseUp = () => {
-    if (!isDrawing.current || !imgRef.current || !currentBox) return;
-    isDrawing.current = false;
+  const handlePointerUp = () => {
+    if (!isDrawing.current || !currentBox || !imgRef.current) {
+      isDrawing.current = false;
+      setCurrentBox(null);
+      return;
+    }
 
-    // Only add if box is reasonably large (> 10px)
-    if (currentBox.w > 10 && currentBox.h > 10) {
-      const rect = imgRef.current.getBoundingClientRect();
+    isDrawing.current = false;
+    const rect = imgRef.current.getBoundingClientRect();
+
+    if (currentBox.w > 15 && currentBox.h > 15 && rect.width > 0 && rect.height > 0) {
       const scaleX = naturalDimensions.width / rect.width;
       const scaleY = naturalDimensions.height / rect.height;
 
@@ -117,47 +137,69 @@ export const BlurFaceTool: React.FC = () => {
     setCurrentBox(null);
   };
 
-  const handleDeleteRegion = (index: number) => {
-    setRegions((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const handleApplyBlur = async () => {
-    if (!file) return;
+    if (!file || regions.length === 0) return;
     setIsProcessing(true);
     setErrorMsg(null);
 
     try {
-      // Update all regions to current type & intensity if user changed them
-      const updatedRegions = regions.map((r) => ({
+      const updatedRegions: BlurRegion[] = regions.map((r) => ({
         ...r,
         type: blurType,
         intensity,
       }));
-
       const res = await blurImageRegions(file, updatedRegions);
+
       setResult(res);
+      const resUrl = URL.createObjectURL(res.blob);
+      setResultUrl(resUrl);
       setIsProcessing(false);
       try {
-        confetti({ particleCount: 40, spread: 60 });
+        confetti({ particleCount: 35, spread: 60 });
       } catch {
         // ignore
       }
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Error applying blur.');
+      setErrorMsg(err instanceof Error ? err.message : 'Error blurring regions.');
       setIsProcessing(false);
     }
   };
 
   const handleDownload = () => {
     if (!result) return;
-    const url = URL.createObjectURL(result.blob);
+    const url = resultUrl || URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!resultUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+
+  const openOriginalPreview = () => {
+    if (!file || !imageSrc) return;
+    setModalConfig({
+      title: `${file.name} (Original Image)`,
+      imageSrc,
+      fileName: file.name,
+      fileSizeStr: `${(file.size / 1024).toFixed(1)} KB`,
+      dimensions: naturalDimensions,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!result || !resultUrl) return;
+    setModalConfig({
+      title: `${result.fileName} (Blurred / Redacted Result)`,
+      imageSrc: resultUrl,
+      compareSrc: imageSrc || undefined,
+      fileName: result.fileName,
+      fileSizeStr: `${(result.blob.size / 1024).toFixed(1)} KB`,
+      dimensions: naturalDimensions,
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -178,77 +220,58 @@ export const BlurFaceTool: React.FC = () => {
             <EyeOff className="w-8 h-8" />
           </div>
           <span className="text-lg font-bold text-[#102A43]">
-            Select photo to blur faces or private areas
+            Select photo to blur faces or sensitive areas
           </span>
           <span className="text-xs text-[#61758A] mt-1.5">
-            Hide faces, license plates, documents and sensitive items directly in your browser
+            Client-side redaction with Gaussian blur, pixelation mosaic, or blackout rectangles
           </span>
           <span className="mt-5 px-6 py-2.5 rounded-full bg-[#D98218] text-white hover:bg-[#C66A08] text-sm font-bold shadow-md">
-            Select Photo
+            Select IMAGE
           </span>
         </label>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Interactive Canvas & Visual Boxes */}
+          {/* Left Column: Interactive Canvas Viewport */}
           <div className="lg:col-span-7 flex flex-col items-center">
             <div
               ref={containerRef}
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              className="w-full bg-[#FAF5EC] rounded-3xl p-4 sm:p-6 border border-[#E9DCC8] shadow-inner flex items-center justify-center min-h-[380px] overflow-hidden relative select-none cursor-crosshair"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className="relative w-full bg-[#2A2E35] rounded-3xl p-4 border border-[#E9DCC8] shadow-inner flex items-center justify-center min-h-[380px] overflow-hidden select-none cursor-crosshair"
             >
               {imageSrc && (
                 <div className="relative inline-block">
                   <img
                     ref={imgRef}
                     src={imageSrc}
-                    alt="Target for face blur"
-                    className="max-h-[460px] max-w-full rounded-xl shadow-md border border-[#E9DCC8] object-contain pointer-events-none"
+                    alt="Target"
+                    className="max-h-[340px] max-w-full rounded-2xl object-contain block pointer-events-none"
                   />
 
-                  {/* Render Existing Blur Boxes Overlay */}
+                  {/* Render existing boxes */}
                   {imgRef.current &&
-                    naturalDimensions.width > 0 &&
                     regions.map((reg, idx) => {
-                      const rect = imgRef.current?.getBoundingClientRect();
-                      if (!rect) return null;
-                      const scaleX = rect.width / naturalDimensions.width;
-                      const scaleY = rect.height / naturalDimensions.height;
-
-                      const boxLeft = reg.x * scaleX;
-                      const boxTop = reg.y * scaleY;
-                      const boxW = reg.width * scaleX;
-                      const boxH = reg.height * scaleY;
-
+                      const scaleX = imgRef.current!.clientWidth / naturalDimensions.width;
+                      const scaleY = imgRef.current!.clientHeight / naturalDimensions.height;
                       return (
                         <div
                           key={idx}
                           style={{
-                            left: `${boxLeft}px`,
-                            top: `${boxTop}px`,
-                            width: `${boxW}px`,
-                            height: `${boxH}px`,
+                            left: `${reg.x * scaleX}px`,
+                            top: `${reg.y * scaleY}px`,
+                            width: `${reg.width * scaleX}px`,
+                            height: `${reg.height * scaleY}px`,
                           }}
-                          className={`absolute border-2 rounded-lg flex items-center justify-center group ${
-                            reg.type === 'blackout'
-                              ? 'bg-black/95 border-black text-white'
-                              : reg.type === 'pixelate'
-                              ? 'bg-emerald-500/30 backdrop-blur-xs border-emerald-500 text-emerald-950 font-mono text-[10px]'
-                              : 'bg-blue-500/30 backdrop-blur-md border-blue-500 text-blue-950 font-bold text-xs'
-                          }`}
+                          className="absolute border-2 border-[#D98218] bg-[#D98218]/30 backdrop-blur-xs rounded flex items-start justify-end p-1 pointer-events-auto"
                         >
-                          <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-white/80 shadow-xs">
-                            {reg.type === 'blackout' ? 'Blackout' : reg.type === 'pixelate' ? 'Mosaic' : 'Blur'}
-                          </span>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDeleteRegion(idx);
+                              setRegions((prev) => prev.filter((_, i) => i !== idx));
                             }}
-                            className="absolute -top-2.5 -right-2.5 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md hover:bg-red-700 cursor-pointer"
-                            title="Remove Box"
+                            className="w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center text-[10px] cursor-pointer"
                           >
                             ×
                           </button>
@@ -256,7 +279,7 @@ export const BlurFaceTool: React.FC = () => {
                       );
                     })}
 
-                  {/* Render Current Drawing Box */}
+                  {/* Render active dragging box */}
                   {currentBox && (
                     <div
                       style={{
@@ -265,16 +288,34 @@ export const BlurFaceTool: React.FC = () => {
                         width: `${currentBox.w}px`,
                         height: `${currentBox.h}px`,
                       }}
-                      className="absolute border-2 border-dashed border-[#D98218] bg-[#D98218]/20 rounded-lg pointer-events-none"
+                      className="absolute border-2 border-dashed border-white bg-white/20 pointer-events-none"
                     />
                   )}
                 </div>
               )}
             </div>
 
-            <p className="mt-3 text-xs text-[#61758A] text-center">
-              💡 <strong>Tip:</strong> Click and drag anywhere on the photo above to draw a new blur box over a face or object.
-            </p>
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                type="button"
+                onClick={openOriginalPreview}
+                className="px-3 py-1.5 bg-white hover:bg-[#FFF8EE] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Original</span>
+              </button>
+              <button
+                onClick={() => {
+                  setFile(null);
+                  setImageSrc(null);
+                  setRegions([]);
+                  setResult(null);
+                }}
+                className="text-xs text-[#D98218] font-bold hover:underline cursor-pointer"
+              >
+                Choose another image
+              </button>
+            </div>
           </div>
 
           {/* Right Column: Style Options & Action */}
@@ -375,25 +416,49 @@ export const BlurFaceTool: React.FC = () => {
             )}
 
             {result && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col gap-3 shadow-xs">
                 <div>
                   <h4 className="text-xs font-bold text-emerald-900">Privacy Blur Applied!</h4>
                   <p className="text-[11px] text-emerald-700">
                     {regions.length} region{regions.length > 1 ? 's' : ''} protected safely.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownload}
-                  className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={openResultPreview}
+                    className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Preview & Compare Result</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    className="flex-1 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer min-w-[120px]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+          dimensions={modalConfig.dimensions}
+        />
       )}
     </div>
   );

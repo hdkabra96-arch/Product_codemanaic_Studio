@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Upload, Download, RefreshCw, Check, AlertCircle, Wand2, RotateCw, FlipHorizontal, FlipVertical, Type, RotateCcw } from 'lucide-react';
+import { Upload, Download, RefreshCw, Check, AlertCircle, Wand2, RotateCw, FlipHorizontal, FlipVertical, Type, RotateCcw, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { processImageEditor } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 interface EditorState {
   brightness: number;
@@ -46,7 +47,18 @@ export const ImageEditorTool: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'adjust' | 'filters' | 'transform' | 'text'>('adjust');
   const [isProcessing, setIsProcessing] = useState(false);
   const [downloadBlob, setDownloadBlob] = useState<{ blob: Blob; fileName: string } | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+  } | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const imageElementRef = useRef<HTMLImageElement | null>(null);
@@ -188,6 +200,8 @@ export const ImageEditorTool: React.FC = () => {
       });
 
       setDownloadBlob(res);
+      const resUrl = URL.createObjectURL(res.blob);
+      setDownloadUrl(resUrl);
       setIsProcessing(false);
       try {
         confetti({ particleCount: 40, spread: 60 });
@@ -202,14 +216,26 @@ export const ImageEditorTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!downloadBlob) return;
-    const url = URL.createObjectURL(downloadBlob.blob);
+    const url = downloadUrl || URL.createObjectURL(downloadBlob.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = downloadBlob.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!downloadUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+
+  const openResultPreview = () => {
+    if (!downloadBlob || !downloadUrl) return;
+    setModalConfig({
+      title: `${downloadBlob.fileName} (Edited Image Result)`,
+      imageSrc: downloadUrl,
+      compareSrc: imageElementRef.current?.src || undefined,
+      fileName: downloadBlob.fileName,
+      fileSizeStr: `${(downloadBlob.blob.size / 1024).toFixed(1)} KB`,
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -532,7 +558,7 @@ export const ImageEditorTool: React.FC = () => {
               )}
             </button>
           ) : (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <Check className="w-4 h-4" />
@@ -544,16 +570,39 @@ export const ImageEditorTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openResultPreview}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Preview & Compare Result</span>
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+        />
       )}
     </div>
   );

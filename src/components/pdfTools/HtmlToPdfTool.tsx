@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Globe, Code2, Download, Check, AlertCircle, RefreshCw, FileText } from 'lucide-react';
+import { Globe, Code2, Download, Check, AlertCircle, RefreshCw, FileText, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { convertHtmlToPdf } from '../../services/pdf/htmlToPdfService';
+import { PdfDocumentReviewModal } from './PdfDocumentReviewModal';
 
 const SAMPLE_HTML = `<!DOCTYPE html>
 <html>
@@ -34,6 +35,14 @@ export const HtmlToPdfTool: React.FC = () => {
   const [resultBytes, setResultBytes] = useState<Uint8Array | null>(null);
   const [resultTitle, setResultTitle] = useState('converted_webpage');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Review modal state
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+
+  const openResultReview = () => {
+    if (!resultBytes) return;
+    setIsReviewOpen(true);
+  };
 
   const handleConvert = async () => {
     setIsProcessing(true);
@@ -260,15 +269,35 @@ export const HtmlToPdfTool: React.FC = () => {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
-          >
-            <Download className="w-4 h-4" />
-            <span>Download PDF</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openResultReview}
+              className="px-4 py-2.5 rounded-full bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Eye className="w-4 h-4 text-emerald-700" />
+              <span>Review Converted PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download PDF</span>
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* Review Modal */}
+      {isReviewOpen && resultBytes && (
+        <PdfDocumentReviewModal
+          pdfData={resultBytes}
+          title={`${resultTitle || 'webpage'}.pdf (Review)`}
+          initialPage={1}
+          onClose={() => setIsReviewOpen(false)}
+        />
       )}
     </div>
   );

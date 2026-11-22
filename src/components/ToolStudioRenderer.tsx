@@ -37,7 +37,7 @@ import { PdfToPdfaTool } from './pdfTools/PdfToPdfaTool';
 import { PdfRepairTool } from './pdfTools/PdfRepairTool';
 import { PdfCompareTool } from './pdfTools/PdfCompareTool';
 import { PdfScanTool } from './pdfTools/PdfScanTool';
-import { PdfQualityConversionTool } from './pdfTools/PdfQualityConversionTool';
+import { PdfToTextTool } from './pdfTools/PdfToTextTool';
 
 // Image Tools
 import { ImageConversionTool } from './imageTools/ImageConversionTool';
@@ -49,6 +49,7 @@ import { ImageOcrTool } from './imageTools/ImageOcrTool';
 import { ImageBackgroundRemoverTool } from './imageTools/ImageBackgroundRemoverTool';
 import { ImageToPdfTool } from './imageTools/ImageToPdfTool';
 import { ImageWatermarkTool } from './imageTools/ImageWatermarkTool';
+import { ImageWatermarkRemoverTool } from './imageTools/ImageWatermarkRemoverTool';
 import { ImageEnhancerTool } from './imageTools/ImageEnhancerTool';
 import { ImageMetadataRemoverTool } from './imageTools/ImageMetadataRemoverTool';
 import { MemeGeneratorTool } from './imageTools/MemeGeneratorTool';
@@ -449,13 +450,13 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'pdf-repair') return <PdfRepairTool />;
   if (tool.id === 'pdf-compare') return <PdfCompareTool />;
   if (tool.id === 'scan-to-pdf') return <PdfScanTool />;
-  if (tool.id === 'pdf-conversion') return <PdfQualityConversionTool />;
+  if (tool.id === 'pdf-to-text' || tool.id === 'extract-pdf-text') return <PdfToTextTool />;
 
-  // 2. Specialized Real Image Processing Engines (All 14 Image Tools)
-  // 2. Specialized Real Image Processing Engines (All iLoveIMG Image Tools)
-  if (tool.id === 'image-conversion') return <ImageConversionTool mode="general" />;
-  if (tool.id === 'jpg-to-png' || tool.id === 'convert-from-jpg') return <ConvertFromJpgTool />;
-  if (tool.id === 'png-to-jpg' || tool.id === 'convert-to-jpg') return <ImageConversionTool mode="png-to-jpg" />;
+  // 2. Specialized Real Image Processing Engines (All 20+ Image Tools)
+  if (tool.id === 'image-conversion' || tool.id === 'convert-to-jpg') return <ImageConversionTool mode="general" />;
+  if (tool.id === 'convert-from-jpg') return <ConvertFromJpgTool />;
+  if (tool.id === 'jpg-to-png') return <ImageConversionTool mode="jpg-to-png" />;
+  if (tool.id === 'png-to-jpg') return <ImageConversionTool mode="png-to-jpg" />;
   if (tool.id === 'webp-converter') return <ImageConversionTool mode="webp" />;
   if (tool.id === 'image-compressor' || tool.id === 'compress-image') return <ImageCompressorTool />;
   if (tool.id === 'image-resizer' || tool.id === 'resize-image') return <ImageResizerTool />;
@@ -465,7 +466,9 @@ export const ToolStudioRenderer: React.FC<ToolStudioRendererProps> = ({ tool }) 
   if (tool.id === 'background-remover' || tool.id === 'remove-background') return <ImageBackgroundRemoverTool />;
   if (tool.id === 'image-to-pdf') return <ImageToPdfTool />;
   if (tool.id === 'image-watermark' || tool.id === 'watermark-image') return <ImageWatermarkTool />;
-  if (tool.id === 'image-quality-enhancer' || tool.id === 'upscale-image') return <ImageUpscaleTool />;
+  if (tool.id === 'image-watermark-remover' || tool.id === 'remove-watermark-image' || tool.id === 'watermark-remover') return <ImageWatermarkRemoverTool />;
+  if (tool.id === 'upscale-image') return <ImageUpscaleTool />;
+  if (tool.id === 'image-quality-enhancer') return <ImageEnhancerTool />;
   if (tool.id === 'image-metadata-remover') return <ImageMetadataRemoverTool />;
   if (tool.id === 'meme-generator') return <MemeGeneratorTool />;
   if (tool.id === 'rotate-image') return <ImageRotateTool />;

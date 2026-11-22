@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { Upload, Download, RefreshCw, Check, AlertCircle, ShieldAlert, ShieldCheck, Info } from 'lucide-react';
+import { Upload, Download, RefreshCw, Check, AlertCircle, ShieldAlert, ShieldCheck, Info, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { stripImageMetadata } from '../../services/image/imageProcessingService';
+import { stripImageMetadata, getImageDimensions } from '../../services/image/imageProcessingService';
+import { ImagePreviewModal } from './ImagePreviewModal';
 
 export const ImageMetadataRemoverTool: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<{
@@ -16,7 +19,18 @@ export const ImageMetadataRemoverTool: React.FC = () => {
   } | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleFileSelect = (selected: File) => {
+  // Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [modalConfig, setModalConfig] = useState<{
+    title: string;
+    imageSrc: string;
+    compareSrc?: string;
+    fileName?: string;
+    fileSizeStr?: string;
+    dimensions?: { width: number; height: number };
+  } | null>(null);
+
+  const handleFileSelect = async (selected: File) => {
     if (!selected.type.startsWith('image/')) {
       setErrorMsg('Please select a valid image file.');
       return;
@@ -24,9 +38,18 @@ export const ImageMetadataRemoverTool: React.FC = () => {
     setFile(selected);
     setErrorMsg(null);
     setResult(null);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
 
     const url = URL.createObjectURL(selected);
     setPreviewUrl(url);
+
+    try {
+      const dims = await getImageDimensions(selected);
+      setDimensions(dims);
+    } catch {
+      // ignore
+    }
   };
 
   const handleStripMetadata = async () => {
@@ -37,6 +60,8 @@ export const ImageMetadataRemoverTool: React.FC = () => {
     try {
       const res = await stripImageMetadata(file);
       setResult(res);
+      const resUrl = URL.createObjectURL(res.blob);
+      setResultUrl(resUrl);
       setIsProcessing(false);
 
       try {
@@ -52,22 +77,50 @@ export const ImageMetadataRemoverTool: React.FC = () => {
 
   const handleDownload = () => {
     if (!result) return;
-    const url = URL.createObjectURL(result.blob);
+    const url = resultUrl || URL.createObjectURL(result.blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = result.fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    if (!resultUrl) setTimeout(() => URL.revokeObjectURL(url), 4000);
   };
 
   const handleReset = () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
     setFile(null);
     setPreviewUrl(null);
+    setResultUrl(null);
+    setDimensions(null);
     setResult(null);
     setErrorMsg(null);
+  };
+
+  const openOriginalPreview = () => {
+    if (!file || !previewUrl) return;
+    setModalConfig({
+      title: `${file.name} (Source Image)`,
+      imageSrc: previewUrl,
+      fileName: file.name,
+      fileSizeStr: `${(file.size / 1024).toFixed(1)} KB`,
+      dimensions: dimensions || undefined,
+    });
+    setIsPreviewOpen(true);
+  };
+
+  const openResultPreview = () => {
+    if (!result || !resultUrl) return;
+    setModalConfig({
+      title: `${result.fileName} (Cleaned Image - Zero Metadata)`,
+      imageSrc: resultUrl,
+      compareSrc: previewUrl || undefined,
+      fileName: result.fileName,
+      fileSizeStr: `${(result.newSize / 1024).toFixed(1)} KB`,
+      dimensions: dimensions || undefined,
+    });
+    setIsPreviewOpen(true);
   };
 
   return (
@@ -99,18 +152,30 @@ export const ImageMetadataRemoverTool: React.FC = () => {
         </label>
       ) : (
         <div className="space-y-4">
-          {/* Header */}
-          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex items-center justify-between">
+          {/* Header Card with Preview Option */}
+          <div className="p-4 bg-white rounded-2xl border border-[#E9DCC8] shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-sm font-bold text-[#102A43] truncate max-w-xs">{file.name}</span>
-              <span className="text-xs text-[#61758A]">{(file.size / 1024).toFixed(1)} KB</span>
+              <span className="text-xs text-[#61758A]">
+                {(file.size / 1024).toFixed(1)} KB {dimensions ? ` • ${dimensions.width} × ${dimensions.height} px` : ''}
+              </span>
             </div>
-            <button
-              onClick={handleReset}
-              className="text-xs font-semibold text-[#61758A] hover:text-red-600 cursor-pointer"
-            >
-              Change File
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openOriginalPreview}
+                className="px-3.5 py-1.5 bg-[#FFF8EE] hover:bg-[#FFF3DF] text-[#D98218] border border-[#E9DCC8] hover:border-[#D98218] rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Review Image</span>
+              </button>
+              <button
+                onClick={handleReset}
+                className="text-xs font-semibold text-[#61758A] hover:text-red-600 px-2 cursor-pointer"
+              >
+                Change File
+              </button>
+            </div>
           </div>
 
           {/* Privacy Analysis Box */}
@@ -170,7 +235,7 @@ export const ImageMetadataRemoverTool: React.FC = () => {
               )}
             </button>
           ) : (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
                   <ShieldCheck className="w-4 h-4" />
@@ -182,16 +247,40 @@ export const ImageMetadataRemoverTool: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleDownload}
-                className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Clean Image</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openResultPreview}
+                  className="px-3.5 py-2 bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-full shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Preview & Compare Result</span>
+                </button>
+                <button
+                  onClick={handleDownload}
+                  className="px-5 py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Clean Image</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* Full-Feature Image Preview Modal */}
+      {modalConfig && (
+        <ImagePreviewModal
+          isOpen={isPreviewOpen}
+          onClose={() => setIsPreviewOpen(false)}
+          title={modalConfig.title}
+          imageSrc={modalConfig.imageSrc}
+          compareSrc={modalConfig.compareSrc}
+          fileName={modalConfig.fileName}
+          fileSizeStr={modalConfig.fileSizeStr}
+          dimensions={modalConfig.dimensions}
+        />
       )}
     </div>
   );
