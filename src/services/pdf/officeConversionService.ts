@@ -1,4 +1,20 @@
-import { Document, Paragraph, TextRun, HeadingLevel, Packer } from 'docx';
+import {
+  Document,
+  Paragraph,
+  TextRun,
+  HeadingLevel,
+  Packer,
+  Table,
+  TableRow,
+  TableCell,
+  WidthType,
+  BorderStyle,
+  ShadingType,
+  AlignmentType,
+  Header,
+  Footer,
+  PageNumber,
+} from 'docx';
 import * as XLSX from 'xlsx';
 import pptxgen from 'pptxgenjs';
 import mammoth from 'mammoth';
@@ -44,40 +60,63 @@ export async function analyzeDocumentForConversion(
     fileType === 'pdf-to-excel' ||
     fileType === 'pdf-to-powerpoint'
   ) {
-    const pagesText = await extractTextFromPdf(buffer);
-    const totalPages = pagesText.length || 1;
-
+    let totalPages = 1;
     let totalWords = 0;
     let totalChars = 0;
     let detectedTables = 0;
     let detectedHeadings = 0;
 
-    for (const p of pagesText) {
-      totalChars += p.text.length;
-      const words = p.text.trim().split(/\s+/).filter(Boolean);
-      totalWords += words.length;
+    try {
+      const structured = await extractStructuredPdfDoc(buffer);
+      totalPages = structured.pages.length || 1;
 
-      let consecutiveTableRows = 0;
-      for (const line of p.lines) {
-        const trimmed = line.trim();
-        // Check for table rows (comma, tab, or double space separated)
-        if (/\t|,| {2,}/.test(trimmed) && trimmed.length > 5) {
-          consecutiveTableRows++;
-          if (consecutiveTableRows === 2) {
-            detectedTables++;
+      for (const page of structured.pages) {
+        let i = 0;
+        while (i < page.lines.length) {
+          const line = page.lines[i];
+          const text = line.fullText.trim();
+          totalChars += text.length;
+          totalWords += text.split(/\s+/).filter(Boolean).length;
+
+          if (line.cells.length >= 2) {
+            let j = i + 1;
+            while (j < page.lines.length && page.lines[j].cells.length >= 2) {
+              const dy = page.lines[j - 1].y - page.lines[j].y;
+              if (dy >= 9 && dy <= 30) {
+                j++;
+              } else {
+                break;
+              }
+            }
+            if (j - i >= 2) {
+              detectedTables++;
+              i = j;
+              continue;
+            }
           }
-        } else {
-          consecutiveTableRows = 0;
-        }
 
-        // Check for headings (short, capitalised, or title style)
-        if (
-          trimmed.length > 3 &&
-          trimmed.length < 55 &&
-          !trimmed.endsWith('.') &&
-          (/^[A-Z0-9\s:—–-]+$/.test(trimmed) || /^(Chapter|Section|\d+\.)/i.test(trimmed))
-        ) {
-          detectedHeadings++;
+          if (
+            (/^\d+\.\s+[A-Z]/.test(text) && text.length < 80) ||
+            (line.fontSize >= 14 && text.length < 60)
+          ) {
+            detectedHeadings++;
+          }
+
+          i++;
+        }
+      }
+    } catch {
+      const pagesText = await extractTextFromPdf(buffer);
+      totalPages = pagesText.length || 1;
+      for (const p of pagesText) {
+        totalChars += p.text.length;
+        const words = p.text.trim().split(/\s+/).filter(Boolean);
+        totalWords += words.length;
+        for (const line of p.lines) {
+          const trimmed = line.trim();
+          if (/^[A-Z0-9\s:—–-]+$/.test(trimmed) && trimmed.length < 50) {
+            detectedHeadings++;
+          }
         }
       }
     }
@@ -288,96 +327,617 @@ export async function analyzeDocumentForConversion(
   }
 }
 
+interface StructuredPdfItem {
+  str: string;
+  x: number;
+  y: number;
+  w: number;
+  fontSize: number;
+}
+
+interface StructuredPdfCell {
+  text: string;
+  x: number;
+  w: number;
+  fontSize: number;
+}
+
+interface StructuredPdfLine {
+  y: number;
+  fontSize: number;
+  cells: StructuredPdfCell[];
+  fullText: string;
+}
+
+interface StructuredPdfPage {
+  pageNumber: number;
+  lines: StructuredPdfLine[];
+}
+
+interface StructuredPdfDoc {
+  runningHeader: string;
+  pages: StructuredPdfPage[];
+}
+
+/**
+ * Extracts spatially grouped lines and columns from PDF using PDF.js text coordinates.
+ * Preserves horizontal positioning to distinguish columns in tables and eliminate footer noise.
+ */
+async function extractStructuredPdfDoc(pdfData: ArrayBuffer): Promise<StructuredPdfDoc> {
+  const safeData = clonePdfBuffer(pdfData);
+  const loadingTask = pdfjsLib.getDocument({ data: safeData });
+  const pdf = await loadingTask.promise;
+  const numPages = pdf.numPages;
+
+  let docRunningHeader = '';
+  const pages: StructuredPdfPage[] = [];
+
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    const page = await pdf.getPage(pageNum);
+    const content = await page.getTextContent();
+    const rawItems: StructuredPdfItem[] = (content.items as Array<any>)
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({
+        str: it.str,
+        x: it.transform[4],
+        y: it.transform[5],
+        w: it.width || 0,
+        fontSize: Math.hypot(it.transform[0], it.transform[1]) || it.height || 10,
+      }));
+
+    // Group items into horizontal line buckets
+    rawItems.sort((a, b) => b.y - a.y);
+    const lineBuckets: Array<{ y: number; items: StructuredPdfItem[] }> = [];
+
+    for (const item of rawItems) {
+      let bucket = lineBuckets.find((b) => Math.abs(b.y - item.y) <= 3.5);
+      if (!bucket) {
+        bucket = { y: item.y, items: [] };
+        lineBuckets.push(bucket);
+      }
+      bucket.items.push(item);
+    }
+
+    lineBuckets.sort((a, b) => b.y - a.y);
+
+    // Identify running header or footer
+    for (const b of lineBuckets) {
+      if (b.y < 35) {
+        const text = b.items.map((i) => i.str).join(' ');
+        if (!docRunningHeader && text.includes('|')) {
+          docRunningHeader = text.replace(/Page\s+\d+.*$/i, '').trim();
+        }
+      }
+    }
+
+    // Filter out running footer (y < 35)
+    const contentLines = lineBuckets.filter((b) => b.y >= 35);
+
+    // Segment lines into columns based on horizontal spacing
+    const structuredLines: StructuredPdfLine[] = contentLines.map((b) => {
+      b.items.sort((a, b) => a.x - b.x);
+      const cells: StructuredPdfCell[] = [];
+      let currentCell: StructuredPdfCell | null = null;
+
+      for (const it of b.items) {
+        if (!currentCell) {
+          currentCell = { text: it.str, x: it.x, w: it.w, fontSize: it.fontSize };
+        } else {
+          const gap = it.x - (currentCell.x + currentCell.w);
+          if (gap >= 22) {
+            cells.push({ ...currentCell, text: currentCell.text.trim() });
+            currentCell = { text: it.str, x: it.x, w: it.w, fontSize: it.fontSize };
+          } else {
+            const needsSpace = !currentCell.text.endsWith(' ') && !it.str.startsWith(' ');
+            currentCell.text += (needsSpace ? ' ' : '') + it.str;
+            currentCell.w = it.x + it.w - currentCell.x;
+          }
+        }
+      }
+      if (currentCell) {
+        cells.push({ ...currentCell, text: currentCell.text.trim() });
+      }
+
+      const avgFontSize =
+        b.items.reduce((acc, it) => acc + it.fontSize, 0) / (b.items.length || 1);
+
+      return {
+        y: b.y,
+        fontSize: avgFontSize,
+        cells,
+        fullText: cells.map((c) => c.text).join(' '),
+      };
+    });
+
+    pages.push({
+      pageNumber: pageNum,
+      lines: structuredLines,
+    });
+  }
+
+  return {
+    runningHeader: docRunningHeader,
+    pages,
+  };
+}
+
 /**
  * PDF to Word (.docx)
- * Converts PDF into a cleanly formatted, editable Microsoft Word document.
+ * High-fidelity layout and table reconstruction engine matching iLovePDF standards.
+ * Detects real tables with styled headers, alternating rows, borders, callouts, and clean paragraphs.
  */
 export async function convertPdfToWord(
   pdfData: ArrayBuffer,
   fileName: string
 ): Promise<Blob> {
-  const pagesText = await extractTextFromPdf(pdfData);
+  const structuredDoc = await extractStructuredPdfDoc(pdfData);
+  const sectionsChildren: (Paragraph | Table)[] = [];
 
-  const sectionsChildren: Paragraph[] = [
-    new Paragraph({
-      text: fileName.replace(/\.[^/.]+$/, ''),
-      heading: HeadingLevel.TITLE,
-      spacing: { after: 300 },
-    }),
-  ];
+  for (let pageIdx = 0; pageIdx < structuredDoc.pages.length; pageIdx++) {
+    const page = structuredDoc.pages[pageIdx];
+    const pageLines = page.lines;
+    const isFirstPage = pageIdx === 0;
 
-  for (let idx = 0; idx < pagesText.length; idx++) {
-    const page = pagesText[idx];
+    let i = 0;
+    let isPageStart = true;
 
-    // Page header with page break before (except for first page)
-    sectionsChildren.push(
-      new Paragraph({
-        text: `Page ${page.page}`,
-        heading: HeadingLevel.HEADING_2,
-        pageBreakBefore: idx > 0,
-        spacing: { before: 200, after: 180 },
-      })
-    );
+    while (i < pageLines.length) {
+      const line = pageLines[i];
+      const trimmedText = line.fullText.trim();
 
-    if (page.lines.length === 0) {
-      sectionsChildren.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: '[Scanned page or graphic content - OCR text extraction recommended]',
-              italics: true,
-              color: '999999',
+      if (!trimmedText) {
+        i++;
+        continue;
+      }
+
+      // 1. Detect Callout / Notice Box (e.g. "Submission note:", "Scope rule:", "Important:")
+      const isCallout =
+        /^(Submission note|Scope rule|Important|Note|Notice|Warning|Caution):/i.test(trimmedText) ||
+        /^This is the correct way to comply/i.test(trimmedText);
+
+      if (isCallout) {
+        let calloutText = trimmedText;
+        while (
+          i + 1 < pageLines.length &&
+          pageLines[i + 1].cells.length === 1 &&
+          !/^(Submission note|Scope rule|Important|Note|Notice|Warning|Caution|\d+\.)/i.test(
+            pageLines[i + 1].fullText
+          ) &&
+          pageLines[i].y - pageLines[i + 1].y <= 18 &&
+          pageLines[i].y - pageLines[i + 1].y > 8
+        ) {
+          i++;
+          calloutText += ' ' + pageLines[i].fullText.trim();
+        }
+
+        const colonIdx = calloutText.indexOf(':');
+        let prefix = '';
+        let body = calloutText;
+        if (colonIdx > 0 && colonIdx < 30) {
+          prefix = calloutText.slice(0, colonIdx + 1);
+          body = calloutText.slice(colonIdx + 1).trim();
+        }
+
+        const calloutTable = new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows: [
+            new TableRow({
+              children: [
+                new TableCell({
+                  shading: { fill: 'FEF9E7', type: ShadingType.CLEAR },
+                  borders: {
+                    top: { style: BorderStyle.NONE },
+                    bottom: { style: BorderStyle.NONE },
+                    right: { style: BorderStyle.NONE },
+                    left: { style: BorderStyle.SINGLE, size: 24, color: 'E67E22' },
+                  },
+                  margins: { top: 120, bottom: 120, left: 180, right: 180 },
+                  children: [
+                    new Paragraph({
+                      spacing: { line: 276 },
+                      children: [
+                        ...(prefix
+                          ? [
+                              new TextRun({
+                                text: prefix + ' ',
+                                bold: true,
+                                color: '793D00',
+                                size: 19,
+                              }),
+                            ]
+                          : []),
+                        new TextRun({
+                          text: body,
+                          color: '5A3E1B',
+                          size: 19,
+                        }),
+                      ],
+                    }),
+                  ],
+                }),
+              ],
             }),
           ],
-          spacing: { after: 150 },
-        })
-      );
-    } else {
-      for (const line of page.lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
+        });
 
-        // Check if line looks like a sub-heading (short, capitalized)
-        if (
-          trimmed.length < 50 &&
-          !trimmed.endsWith('.') &&
-          (/^[A-Z0-9\s:—–-]+$/.test(trimmed) || /^(Chapter|Section|\d+\.)/i.test(trimmed))
+        sectionsChildren.push(calloutTable);
+        sectionsChildren.push(new Paragraph({ spacing: { after: 120 } }));
+        i++;
+        isPageStart = false;
+        continue;
+      }
+
+      // 2. Detect Tables (2 or more consecutive rows with >= 2 cells and consistent row spacing)
+      if (line.cells.length >= 2) {
+        const tableLines: StructuredPdfLine[] = [line];
+        let j = i + 1;
+        while (j < pageLines.length && pageLines[j].cells.length >= 2) {
+          const dy = pageLines[j - 1].y - pageLines[j].y;
+          if (dy >= 9 && dy <= 30) {
+            tableLines.push(pageLines[j]);
+            j++;
+          } else {
+            break;
+          }
+        }
+
+        if (tableLines.length >= 2) {
+          const maxCols = Math.max(...tableLines.map((tl) => tl.cells.length));
+
+          // Estimate column widths by inspecting character lengths
+          const colLens: number[] = new Array(maxCols).fill(10);
+          for (const tl of tableLines) {
+            tl.cells.forEach((c, cIdx) => {
+              colLens[cIdx] = Math.max(colLens[cIdx], c.text.length);
+            });
+          }
+          const totalLen = colLens.reduce((a, b) => a + b, 0);
+          const colWidthsPct = colLens.map((l) => Math.max(10, Math.round((l / totalLen) * 100)));
+          const adjustedSum = colWidthsPct.reduce((a, b) => a + b, 0);
+          if (adjustedSum !== 100) {
+            colWidthsPct[colWidthsPct.length - 1] += 100 - adjustedSum;
+          }
+
+          const tableRows: TableRow[] = tableLines.map((tl, rowIdx) => {
+            const isHeader = rowIdx === 0;
+            const cells: TableCell[] = [];
+
+            for (let c = 0; c < maxCols; c++) {
+              const cellData = tl.cells[c];
+              const cellText = cellData ? cellData.text : '';
+
+              const isNumeric =
+                !isHeader &&
+                (/^[\$€£]?\s*-?[\d,]+(\.\d+)?%?$/.test(cellText) ||
+                  /^\d{1,2}\.\d{1,2}%$/.test(cellText) ||
+                  /^\d+\s*days?$/i.test(cellText));
+
+              cells.push(
+                new TableCell({
+                  width: { size: colWidthsPct[c], type: WidthType.PERCENTAGE },
+                  shading: isHeader
+                    ? { fill: '1669AA', type: ShadingType.CLEAR }
+                    : rowIdx % 2 === 0
+                    ? { fill: 'F2F6FB', type: ShadingType.CLEAR }
+                    : { fill: 'FFFFFF', type: ShadingType.CLEAR },
+                  borders: {
+                    top: { style: BorderStyle.SINGLE, size: 4, color: 'D4DFE8' },
+                    bottom: { style: BorderStyle.SINGLE, size: 4, color: 'D4DFE8' },
+                    left: { style: BorderStyle.SINGLE, size: 4, color: 'D4DFE8' },
+                    right: { style: BorderStyle.SINGLE, size: 4, color: 'D4DFE8' },
+                  },
+                  margins: { top: 90, bottom: 90, left: 140, right: 140 },
+                  children: [
+                    new Paragraph({
+                      alignment: isNumeric
+                        ? AlignmentType.RIGHT
+                        : isHeader && maxCols > 3 && c > 1
+                        ? AlignmentType.RIGHT
+                        : AlignmentType.LEFT,
+                      children: [
+                        new TextRun({
+                          text: cellText,
+                          bold: isHeader,
+                          color: isHeader ? 'FFFFFF' : '222222',
+                          size: 17,
+                        }),
+                      ],
+                    }),
+                  ],
+                })
+              );
+            }
+
+            return new TableRow({
+              tableHeader: isHeader,
+              cantSplit: true,
+              children: cells,
+            });
+          });
+
+          const table = new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: tableRows,
+          });
+
+          sectionsChildren.push(table);
+          sectionsChildren.push(new Paragraph({ spacing: { after: 140 } }));
+
+          i = j;
+          isPageStart = false;
+          continue;
+        }
+      }
+
+      // 3. Page 1 Title and Subtitles
+      if (isFirstPage && line.fontSize >= 18 && i < 3) {
+        sectionsChildren.push(
+          new Paragraph({
+            text: trimmedText,
+            heading: HeadingLevel.TITLE,
+            alignment: AlignmentType.CENTER,
+            spacing: { before: isPageStart ? 240 : 160, after: 140 },
+          })
+        );
+        i++;
+        isPageStart = false;
+        continue;
+      }
+
+      if (isFirstPage && line.fontSize >= 12 && i < 5) {
+        sectionsChildren.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 200 },
+            children: [
+              new TextRun({
+                text: trimmedText,
+                bold: true,
+                color: '44647C',
+                size: 22,
+              }),
+            ],
+          })
+        );
+        i++;
+        isPageStart = false;
+        continue;
+      }
+
+      // 4. Section Headings (e.g. "1. Executive Summary", "2. Dataset Structure")
+      const isHeading1 = /^\d+\.\s+[A-Z]/.test(trimmedText) && trimmedText.length < 80;
+      if (isHeading1) {
+        sectionsChildren.push(
+          new Paragraph({
+            pageBreakBefore: !isFirstPage && isPageStart,
+            heading: HeadingLevel.HEADING_1,
+            spacing: { before: 260, after: 120 },
+            children: [
+              new TextRun({
+                text: trimmedText,
+                bold: true,
+                color: '113B5D',
+                size: 26,
+              }),
+            ],
+          })
+        );
+        i++;
+        isPageStart = false;
+        continue;
+      }
+
+      // 5. Findings with Lead-in Bold ("Finding 1 – ... Evidence: ... Business meaning: ...")
+      if (/^Finding\s+\d+/i.test(trimmedText)) {
+        let findingFull = trimmedText;
+        while (
+          i + 1 < pageLines.length &&
+          pageLines[i + 1].cells.length === 1 &&
+          !/^Finding\s+\d+/i.test(pageLines[i + 1].fullText) &&
+          !/^\d+\./i.test(pageLines[i + 1].fullText) &&
+          pageLines[i].y - pageLines[i + 1].y <= 18
         ) {
-          sectionsChildren.push(
-            new Paragraph({
-              text: trimmed,
-              heading: HeadingLevel.HEADING_3,
-              spacing: { before: 180, after: 100 },
+          i++;
+          findingFull += ' ' + pageLines[i].fullText.trim();
+        }
+
+        const parts = findingFull.split(/(Evidence:|Business meaning:)/g);
+        const textRuns: TextRun[] = [];
+
+        for (let pIdx = 0; pIdx < parts.length; pIdx++) {
+          const part = parts[pIdx];
+          if (part === 'Evidence:' || part === 'Business meaning:') {
+            textRuns.push(new TextRun({ text: ' ' + part + ' ', bold: true, color: '113B5D' }));
+          } else if (pIdx === 0 && part.includes('.')) {
+            const firstDot = part.indexOf('.');
+            const titlePart = part.slice(0, firstDot + 1);
+            const rest = part.slice(firstDot + 1);
+            textRuns.push(new TextRun({ text: titlePart, bold: true, color: '113B5D' }));
+            if (rest) textRuns.push(new TextRun({ text: rest, color: '333333' }));
+          } else {
+            textRuns.push(new TextRun({ text: part, color: '333333' }));
+          }
+        }
+
+        sectionsChildren.push(
+          new Paragraph({
+            spacing: { after: 140, line: 260 },
+            children: textRuns,
+          })
+        );
+        i++;
+        isPageStart = false;
+        continue;
+      }
+
+      // 6. Numbered Recommendations with Bold Lead-in Sentence
+      if (/^\d+\.\s+[A-Z]/.test(trimmedText) && trimmedText.includes('.')) {
+        let recFull = trimmedText;
+        while (
+          i + 1 < pageLines.length &&
+          pageLines[i + 1].cells.length === 1 &&
+          !/^\d+\./i.test(pageLines[i + 1].fullText) &&
+          pageLines[i].y - pageLines[i + 1].y <= 18
+        ) {
+          i++;
+          recFull += ' ' + pageLines[i].fullText.trim();
+        }
+
+        const firstDotIdx = recFull.indexOf('.');
+        const secondDotIdx = recFull.indexOf('.', firstDotIdx + 1);
+
+        const runs: TextRun[] = [];
+        if (secondDotIdx > 0 && secondDotIdx - firstDotIdx < 60) {
+          runs.push(
+            new TextRun({
+              text: recFull.slice(0, secondDotIdx + 1),
+              bold: true,
+              color: '113B5D',
             })
           );
-        } else if (/^[•\-*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
-          // Bullet or numbered list item
-          sectionsChildren.push(
-            new Paragraph({
-              text: trimmed,
-              bullet: { level: 0 },
-              spacing: { after: 100 },
+          runs.push(
+            new TextRun({
+              text: recFull.slice(secondDotIdx + 1),
+              color: '333333',
             })
           );
         } else {
-          // Regular paragraph text
-          sectionsChildren.push(
-            new Paragraph({
-              text: trimmed,
-              spacing: { after: 120 },
+          runs.push(
+            new TextRun({
+              text: recFull,
+              color: '333333',
             })
           );
         }
+
+        sectionsChildren.push(
+          new Paragraph({
+            spacing: { after: 140, line: 260 },
+            children: runs,
+          })
+        );
+        i++;
+        isPageStart = false;
+        continue;
       }
+
+      // 7. Page 1 Metadata Key-Value pairs
+      if (
+        isFirstPage &&
+        /^(Prepared by|Dataset|Analysis period|SQL platform|Submission companion):/i.test(
+          trimmedText
+        )
+      ) {
+        const [label, ...val] = trimmedText.split(':');
+        sectionsChildren.push(
+          new Paragraph({
+            spacing: { after: 80 },
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({ text: label + ': ', bold: true, color: '113B5D', size: 20 }),
+              new TextRun({ text: val.join(':').trim(), color: '444444', size: 20 }),
+            ],
+          })
+        );
+        i++;
+        isPageStart = false;
+        continue;
+      }
+
+      // 8. Normal flowing text paragraph (accumulate wrapped lines seamlessly)
+      let paragraphText = trimmedText;
+      let nextLineIdx = i + 1;
+      while (
+        nextLineIdx < pageLines.length &&
+        pageLines[nextLineIdx].cells.length === 1 &&
+        !/^(Submission note|Scope rule|Important|Note|Notice|Finding|\d+\.)/i.test(
+          pageLines[nextLineIdx].fullText
+        )
+      ) {
+        const dy = pageLines[nextLineIdx - 1].y - pageLines[nextLineIdx].y;
+        if (dy >= 9 && dy <= 18) {
+          paragraphText += ' ' + pageLines[nextLineIdx].fullText.trim();
+          nextLineIdx++;
+        } else {
+          break;
+        }
+      }
+
+      sectionsChildren.push(
+        new Paragraph({
+          pageBreakBefore: !isFirstPage && isPageStart,
+          spacing: { after: 140, line: 260 },
+          children: [
+            new TextRun({
+              text: paragraphText,
+              color: '222222',
+              size: 20,
+            }),
+          ],
+        })
+      );
+
+      i = nextLineIdx;
+      isPageStart = false;
     }
   }
 
+  const cleanDocTitle = fileName.replace(/\.[^/.]+$/, '');
+
   const doc = new Document({
     creator: 'Codemaniac Studio PDF to Word Engine',
-    title: fileName.replace(/\.[^/.]+$/, ''),
+    title: cleanDocTitle,
     sections: [
       {
-        properties: {},
+        properties: {
+          page: {
+            margin: {
+              top: 1000,
+              bottom: 900,
+              left: 1000,
+              right: 1000,
+            },
+          },
+        },
+        headers: {
+          default: new Header({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                spacing: { after: 200 },
+                children: [
+                  new TextRun({
+                    text: structuredDoc.runningHeader || cleanDocTitle,
+                    color: '888888',
+                    size: 16,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
+        footers: {
+          default: new Footer({
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.RIGHT,
+                spacing: { before: 200 },
+                children: [
+                  new TextRun({
+                    text: 'Page ',
+                    color: '888888',
+                    size: 16,
+                  }),
+                  new TextRun({
+                    children: [PageNumber.CURRENT],
+                    color: '888888',
+                    size: 16,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        },
         children: sectionsChildren,
       },
     ],
@@ -389,67 +949,114 @@ export async function convertPdfToWord(
 /**
  * PDF to Excel (.xlsx)
  * Extracts detected tabular data into an actual XLSX workbook with multiple sheets.
+ * Preserves structured table columns and numbers.
  */
 export async function convertPdfToExcel(
   pdfData: ArrayBuffer
 ): Promise<Blob> {
-  const pagesText = await extractTextFromPdf(pdfData);
+  const structuredDoc = await extractStructuredPdfDoc(pdfData);
   const workbook = XLSX.utils.book_new();
 
   let hasData = false;
+  let tableIndex = 1;
+  const allTablesData: Array<Array<string | number>> = [];
 
-  pagesText.forEach((page, idx) => {
-    const rows: Array<Array<string | number>> = [];
+  for (const page of structuredDoc.pages) {
+    const pageLines = page.lines;
+    let i = 0;
 
-    for (const line of page.lines) {
-      // Split on tabs, commas, or 2+ consecutive spaces
-      const cells = line
-        .split(/\t|,| {2,}/)
-        .map((c) => c.trim())
-        .filter((c) => c.length > 0);
+    while (i < pageLines.length) {
+      const line = pageLines[i];
 
-      if (cells.length > 0) {
-        // Parse numbers when applicable
-        const parsedCells = cells.map((cell) => {
-          const cleanNum = cell.replace(/[$,]/g, '');
-          if (/^-?\d+(\.\d+)?$/.test(cleanNum) && cleanNum.length < 15) {
-            return parseFloat(cleanNum);
+      // Detect table block
+      if (line.cells.length >= 2) {
+        const tableLines: StructuredPdfLine[] = [line];
+        let j = i + 1;
+        while (j < pageLines.length && pageLines[j].cells.length >= 2) {
+          const dy = pageLines[j - 1].y - pageLines[j].y;
+          if (dy >= 9 && dy <= 30) {
+            tableLines.push(pageLines[j]);
+            j++;
+          } else {
+            break;
           }
-          return cell;
-        });
-        rows.push(parsedCells);
+        }
+
+        if (tableLines.length >= 2) {
+          hasData = true;
+          const maxCols = Math.max(...tableLines.map((tl) => tl.cells.length));
+          const rows: Array<Array<string | number>> = [];
+
+          for (const tl of tableLines) {
+            const rowCells: Array<string | number> = [];
+            for (let c = 0; c < maxCols; c++) {
+              const cellData = tl.cells[c];
+              const cellText = cellData ? cellData.text.trim() : '';
+
+              // Clean number parsing
+              const cleanNum = cellText.replace(/[$,]/g, '');
+              if (/^-?\d+(\.\d+)?$/.test(cleanNum) && cleanNum.length < 15) {
+                rowCells.push(parseFloat(cleanNum));
+              } else {
+                rowCells.push(cellText);
+              }
+            }
+            rows.push(rowCells);
+          }
+
+          // Use first cell of header for sheet title when readable
+          const headerPrefix = String(rows[0]?.[0] || `Table_${tableIndex}`).replace(/[^a-zA-Z0-9]/g, '_');
+          const sheetName = `P${page.pageNumber}_${headerPrefix}`.slice(0, 31);
+
+          const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+          // Auto-calculate column widths
+          const colWidths = rows.reduce<number[]>((acc, row) => {
+            row.forEach((cell, colIdx) => {
+              const len = String(cell).length;
+              acc[colIdx] = Math.max(acc[colIdx] || 10, Math.min(40, len + 3));
+            });
+            return acc;
+          }, []);
+          worksheet['!cols'] = colWidths.map((w) => ({ wch: w }));
+
+          XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+
+          // Append to combined tables
+          allTablesData.push([`=== Page ${page.pageNumber}: Table ${tableIndex} ===`]);
+          allTablesData.push(...rows);
+          allTablesData.push([]); // blank row separator
+
+          tableIndex++;
+          i = j;
+          continue;
+        }
       }
+
+      i++;
     }
+  }
 
-    if (rows.length === 0) {
-      rows.push([`Page ${page.page}`], ['No tabular text detected on this page.']);
-    } else {
-      hasData = true;
-    }
-
-    const worksheet = XLSX.utils.aoa_to_sheet(rows);
-
-    // Auto-calculate column widths
-    const colWidths = rows.reduce<number[]>((acc, row) => {
-      row.forEach((cell, colIdx) => {
-        const len = String(cell).length;
-        acc[colIdx] = Math.max(acc[colIdx] || 10, Math.min(40, len + 3));
-      });
-      return acc;
-    }, []);
-
-    worksheet['!cols'] = colWidths.map((w) => ({ wch: w }));
-
-    const sheetName = `Page ${idx + 1}`.slice(0, 31);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  });
+  // If tables were detected, prepend the master combined sheet
+  if (hasData && allTablesData.length > 0) {
+    const combinedSheet = XLSX.utils.aoa_to_sheet(allTablesData);
+    XLSX.utils.book_append_sheet(workbook, combinedSheet, 'All_Tables');
+  }
 
   if (!hasData) {
-    const summarySheet = XLSX.utils.aoa_to_sheet([
-      ['Codemaniac Studio PDF to Excel Engine'],
-      ['Notice: The provided PDF might contain scanned images or vector paths.'],
-    ]);
-    XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+    // Fallback if no multi-column tables found (e.g. text-only PDF)
+    const pagesText = await extractTextFromPdf(pdfData);
+    pagesText.forEach((page, idx) => {
+      const rows: Array<Array<string | number>> = [];
+      for (const line of page.lines) {
+        const cells = line.split(/\t|,| {2,}/).map((c) => c.trim()).filter((c) => c.length > 0);
+        if (cells.length > 0) {
+          rows.push(cells);
+        }
+      }
+      const ws = XLSX.utils.aoa_to_sheet(rows.length > 0 ? rows : [['No tabular data detected']]);
+      XLSX.utils.book_append_sheet(workbook, ws, `Page_${idx + 1}`.slice(0, 31));
+    });
   }
 
   const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
